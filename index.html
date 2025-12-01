@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bye Buy - Niterói</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <a href="#" class="logo-container" onclick="nav('home')">
+            <img src="byebuy.png" alt="Logo Bye Buy" class="logo-img">
+        </a>
+        
+        <div class="nav-buttons">
+            <div class="font-controls">
+                <button onclick="resize(2)" title="Aumentar Fonte">A+</button>
+                <button onclick="resize(-2)" title="Diminuir Fonte">A-</button>
+            </div>
+            
+            <div id="guest-nav">
+                <button class="btn-nav" onclick="nav('login')">Entrar</button>
+                <button class="btn-nav filled" onclick="nav('register')">Criar Conta</button>
+            </div>
+
+            <div id="user-nav" class="hidden">
+                <span id="user-greeting">Carregando...</span>
+                <button class="btn-nav filled" onclick="openModal()">+ Novo Item</button>
+                <button class="btn-nav danger" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <section id="view-home" class="view-section active">
+            <div class="hero">
+                <h1>Conectando doações a quem precisa em Niterói</h1>
+                <p>Escolha como você quer ajudar ou ser ajudado hoje.</p>
+            </div>
+
+            <div class="filtros-container">
+                <h2>Mural Solidário</h2>
+                <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openModal()">Anunciar</button>
+            </div>
+            
+            <div class="grid-cards" id="feed-container">
+                <p style="text-align:center; width:100%;">Carregando itens...</p>
+            </div>
+        </section>
+
+        <section id="view-login" class="view-section">
+            <div class="auth-container">
+                <h2 class="auth-title">Bem-vindo de volta!</h2>
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" id="login-pass" required>
+                    </div>
+                    <button type="submit" class="btn-submit">Entrar</button>
+                    <p style="margin-top: 1rem;">
+                        Não tem conta? <a href="#" onclick="nav('register')">Cadastre-se</a>
+                    </p>
+                </form>
+            </div>
+        </section>
+
+        <section id="view-register" class="view-section">
+            <div class="auth-container">
+                <h2 class="auth-title">Criar Conta</h2>
+                
+                <div class="type-toggle" id="register-toggle">
+                    <div class="toggle-bg"></div>
+                    <div class="toggle-option active" id="opt-pessoa" onclick="toggleRegisterType('pessoa')">Sou Doador</div>
+                    <div class="toggle-option" id="opt-ong" onclick="toggleRegisterType('ong')">Sou ONG</div>
+                </div>
+
+                <form id="form-register" onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Nome Completo / Organização</label>
+                        <input type="text" id="reg-name" required>
+                    </div>
+
+                    <div id="ong-reg-fields" class="hidden">
+                        <div class="form-group">
+                            <label>CNPJ</label>
+                            <input type="text" id="reg-cnpj" placeholder="00.000.000/0001-00" maxlength="18">
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de ONG</label>
+                            <select id="reg-type-ong">
+                                <option value="Educação">Educação</option>
+                                <option value="Animais">Animais</option>
+                                <option value="Saúde">Saúde</option>
+                                <option value="Assistência Social">Assistência Social</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Bairro</label>
+                        <select id="reg-bairro">
+                            <option>Icaraí</option>
+                            <option>Centro</option>
+                            <option>Fonseca</option>
+                            <option>Região Oceânica</option>
+                            <option>Santa Rosa</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input type="email" id="reg-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" id="reg-pass" required>
+                    </div>
+                    <button type="submit" class="btn-submit btn-green">Cadastrar</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <div id="modal-item" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h2 id="modal-title" style="color: var(--primary-color); margin-bottom: 1rem;">Novo Item</h2>
+            
+            <form onsubmit="handleCreateItem(event)">
+                <div class="form-group">
+                    <label>Título do Item</label>
+                    <input type="text" id="item-title" placeholder="Ex: Sofá, Ração..." required>
+                </div>
+                <div class="form-group">
+                    <label>Foto do Item</label>
+                    <input type="file" id="item-image" accept="image/*">
+                </div>
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="item-category">
+                        <option>Móveis</option>
+                        <option>Roupas</option>
+                        <option>Educação</option>
+                        <option>Alimentos</option>
+                        <option>Animais</option>
+                    </select>
+                </div>
+
+                <div id="condition-field">
+                    <div class="form-group">
+                        <label>Condição</label>
+                        <select id="item-condition">
+                            <option value="Novo">Novo</option>
+                            <option value="Seminovo">Seminovo</option>
+                            <option value="Usado - Bom">Usado (Bom estado)</option>
+                            <option value="Para Conserto">Para Conserto</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="ong-fields" class="hidden">
+                    <div class="form-group">
+                        <label>Quantidade Necessária (Meta)</label>
+                        <input type="number" id="item-total" value="1" min="1">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">Publicar</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
+    <script src="script.js"></script>
+</body>
+</html>
