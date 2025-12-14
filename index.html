@@ -26,8 +26,12 @@
             </div>
 
             <div id="user-nav" class="hidden">
-                <span id="user-greeting">Carregando...</span>
-                <button class="btn-nav filled" onclick="openModal()">+ Novo Item</button>
+                <div style="display:flex; align-items:center; margin-right:15px;">
+                    <img id="header-avatar" src="https://via.placeholder.com/40" style="width:40px; height:40px; border-radius:50%; margin-right:10px; object-fit:cover; display:none;">
+                    <span id="user-greeting" style="font-weight:bold; color:var(--primary-color);">...</span>
+                </div>
+                <button class="btn-nav" onclick="openProfileModal()">Meu Perfil</button>
+                <button class="btn-nav filled" onclick="openItemModal()">+ Novo Item</button>
                 <button class="btn-nav danger" onclick="logout()">Sair</button>
             </div>
         </div>
@@ -42,11 +46,11 @@
 
             <div class="filtros-container">
                 <h2>Mural Solidário</h2>
-                <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openModal()">Anunciar</button>
+                <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openItemModal()">Anunciar</button>
             </div>
             
             <div class="grid-cards" id="feed-container">
-                <p style="text-align:center; width:100%;">Carregando itens...</p>
+                <p style="text-align:center; width:100%; color:#999;">Carregando itens...</p>
             </div>
         </section>
 
@@ -64,7 +68,7 @@
                     </div>
                     <button type="submit" class="btn-submit">Entrar</button>
                     <p style="margin-top: 1rem;">
-                        Não tem conta? <a href="#" onclick="nav('register')">Cadastre-se</a>
+                        Não tem conta? <a href="#" onclick="nav('register')" style="color:var(--primary-color);">Cadastre-se</a>
                     </p>
                 </form>
             </div>
@@ -81,6 +85,15 @@
                 </div>
 
                 <form id="form-register" onsubmit="handleRegister(event)">
+                    <div class="form-group" style="text-align:center;">
+                        <label>Sua Foto de Perfil</label>
+                        <div style="margin-bottom:10px;">
+                            <img id="reg-preview" src="https://via.placeholder.com/80" style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:2px solid #eee;">
+                        </div>
+                        <label for="reg-image" class="btn-nav" style="font-size:0.8rem; cursor:pointer;">Escolher Foto</label>
+                        <input type="file" id="reg-image" accept="image/*" onchange="previewRegisterImage(this)" style="display:none;">
+                    </div>
+
                     <div class="form-group">
                         <label>Nome Completo / Organização</label>
                         <input type="text" id="reg-name" required>
@@ -110,6 +123,7 @@
                             <option>Fonseca</option>
                             <option>Região Oceânica</option>
                             <option>Santa Rosa</option>
+                            <option>São Francisco</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -128,9 +142,8 @@
 
     <div id="modal-item" class="modal hidden">
         <div class="modal-content">
-            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <span class="close-modal" onclick="closeModal('modal-item')">&times;</span>
             <h2 id="modal-title" style="color: var(--primary-color); margin-bottom: 1rem;">Novo Item</h2>
-            
             <form onsubmit="handleCreateItem(event)">
                 <div class="form-group">
                     <label>Título do Item</label>
@@ -150,7 +163,6 @@
                         <option>Animais</option>
                     </select>
                 </div>
-
                 <div id="condition-field">
                     <div class="form-group">
                         <label>Condição</label>
@@ -162,15 +174,88 @@
                         </select>
                     </div>
                 </div>
-
                 <div id="ong-fields" class="hidden">
                     <div class="form-group">
                         <label>Quantidade Necessária (Meta)</label>
                         <input type="number" id="item-total" value="1" min="1">
                     </div>
                 </div>
-
                 <button type="submit" class="btn-submit">Publicar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-profile" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modal-profile')">&times;</span>
+            <h2>Editar Perfil</h2>
+            <form onsubmit="handleSaveProfile(event)">
+                <div style="text-align:center; margin-bottom:20px;">
+                    <img id="prof-preview" src="https://via.placeholder.com/100" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                    <div style="margin-top:10px;">
+                        <label for="prof-image" style="cursor:pointer; color:var(--primary-color); font-weight:bold;">Alterar Foto</label>
+                        <input type="file" id="prof-image" accept="image/*" style="display:none;" onchange="previewProfileImage(this)">
+                    </div>
+                </div>
+
+                <div class="form-group"><label>Nome</label><input type="text" id="prof-name" readonly style="background:#eee;"></div>
+                <div class="form-group"><label>Bairro</label><input type="text" id="prof-bairro"></div>
+                
+                <div id="prof-ong-fields" class="hidden">
+                    <div class="form-group"><label>Descrição / Missão</label><textarea id="prof-desc" rows="3"></textarea></div>
+                    <div class="form-group"><label>Telefone / WhatsApp</label><input type="text" id="prof-phone"></div>
+                    <div class="form-group"><label>Site / Redes Sociais</label><input type="text" id="prof-site"></div>
+                </div>
+                
+                <button type="submit" class="btn-submit btn-green">Salvar Alterações</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-public-profile" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modal-public-profile')">&times;</span>
+            <div style="text-align:center;">
+                <img id="pub-avatar" src="https://via.placeholder.com/100" style="width:100px; height:100px; border-radius:50%; object-fit:cover; margin-bottom:10px;">
+                <h2 id="pub-name" style="color: var(--primary-color);">Nome</h2>
+                <p id="pub-type" style="font-weight:bold; color:#666; margin-bottom:10px;">Tipo</p>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <p><strong>Bairro:</strong> <span id="pub-bairro">...</span></p>
+                <p id="pub-phone-box"><strong>Contato:</strong> <span id="pub-phone">...</span></p>
+                <p id="pub-site-box"><strong>Site:</strong> <a id="pub-site" href="#" target="_blank">...</a></p>
+            </div>
+
+            <div id="pub-desc-box" style="margin-top: 20px; background: #f9f9f9; padding: 15px; border-radius: 10px;">
+                <strong>Sobre:</strong>
+                <p id="pub-desc" style="margin-top: 5px;">...</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-chat-list" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modal-chat-list')">&times;</span>
+            <h2 style="color: var(--primary-color);">Interessados</h2>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">Selecione uma conversa para responder:</p>
+            <div id="chat-list-container" class="chat-list-container"></div>
+        </div>
+    </div>
+
+    <div id="modal-chat" class="modal hidden">
+        <div class="modal-content chat-content">
+            <div class="chat-header">
+                <h3 id="chat-title">Chat</h3>
+                <span class="close-chat" onclick="closeModal('modal-chat')">&times;</span>
+            </div>
+            
+            <div id="chat-messages" class="chat-messages">
+            </div>
+            
+            <form class="chat-input-area" onsubmit="sendMessage(event)">
+                <input type="text" id="msg-input" placeholder="Digite sua mensagem..." autocomplete="off">
+                <button type="submit">Enviar</button>
             </form>
         </div>
     </div>
