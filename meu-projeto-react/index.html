@@ -46,9 +46,17 @@
             </div>
 
             <div class="filtros-container">
-                <h2>Mural Solidário</h2>
-                <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openItemModal()">Anunciar</button>
-            </div>
+    <h2>Mural Solidário</h2>
+    
+    <div style="flex: 1; max-width: 400px; margin: 0 20px;">
+        <input type="text" id="feed-search" placeholder="Buscar por título, categoria ou bairro..." 
+               onkeyup="filterFeed()" 
+               style="width: 100%; padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc;">
+    </div>
+
+    <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openItemModal()">Anunciar</button>
+</div>
+
             
             <div class="grid-cards" id="feed-container">
                 <p style="text-align:center; width:100%; color:#999;">Carregando itens...</p>

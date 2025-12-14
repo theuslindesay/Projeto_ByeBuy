@@ -151,6 +151,8 @@ function renderCard(id, item) {
     const container = document.getElementById('feed-container');
     
     let isOwner = false;
+    let isAdminUser = currentUser && currentUser.type === 'Admin';
+
     if (currentUser && (item.ownerUid === currentUser.uid)) {
         isOwner = true;
     }
@@ -168,10 +170,22 @@ function renderCard(id, item) {
         }
     }
 
+    let deleteBtnHTML = '';
+    if (isAdminUser) {
+        deleteBtnHTML = `
+            <button onclick="adminDeleteItem('${id}', '${item.title}')" 
+                    style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; margin-top:10px; font-size:0.8rem; width:100%;">
+                🗑️ Admin: Excluir Item
+            </button>
+        `;
+    }
+
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
 
-    let cardHTML = `<article class="card">`;
+    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
+
+    let cardHTML = `<article class="card" data-search="${searchText}">`;
     cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
     cardHTML += `<div class="card-content">`;
     
@@ -184,6 +198,7 @@ function renderCard(id, item) {
             <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
             <p style="font-size: 0.8rem;">${item.current} de ${item.total} conseguidos</p>
             ${btnHTML}
+            ${deleteBtnHTML}
         `;
     } else {
         cardHTML += `
@@ -192,11 +207,13 @@ function renderCard(id, item) {
             <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
             <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
             ${btnHTML}
+            ${deleteBtnHTML}
         `;
     }
     cardHTML += `</div></article>`;
     container.innerHTML += cardHTML;
 }
+
 
 
 function previewRegisterImage(input) {
@@ -747,6 +764,34 @@ function handleAdminEditONG(e) {
     }
 }
 
+function filterFeed() {
+    const term = document.getElementById('feed-search').value.toLowerCase();
+    const cards = document.querySelectorAll('#feed-container .card');
+
+    cards.forEach(card => {
+        const text = card.getAttribute('data-search');
+        if (text.includes(term)) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function adminDeleteItem(itemId, itemTitle) {
+    if (!isAdmin()) return alert("Acesso negado.");
+
+    if (confirm(`ADMIN: Tem certeza que deseja excluir o item "${itemTitle}"?`)) {
+        db.collection("items").doc(itemId).delete()
+        .then(() => {
+            alert("Item excluído com sucesso!");
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Erro ao excluir item.");
+        });
+    }
+}
 
 function deleteONG(ongId, ongName) {
     if (!isAdmin()) {
@@ -758,7 +803,6 @@ function deleteONG(ongId, ongName) {
         return;
     }
 
-    // Primeiro, deletar todos os itens da ONG
     db.collection("items").where("ownerUid", "==", ongId).get()
     .then((snapshot) => {
         const batch = db.batch();
@@ -768,7 +812,6 @@ function deleteONG(ongId, ongName) {
         return batch.commit();
     })
     .then(() => {
-        // Deletar chats relacionados
         return db.collection("chats").where("ownerId", "==", ongId).get();
     })
     .then((snapshot) => {
@@ -779,7 +822,6 @@ function deleteONG(ongId, ongName) {
         return batch.commit();
     })
     .then(() => {
-        // Finalmente, deletar a ONG
         return db.collection("users").doc(ongId).delete();
     })
     .then(() => {
