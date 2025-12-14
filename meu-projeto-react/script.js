@@ -392,7 +392,24 @@ function openPublicProfile(uid) {
     });
 }
 
-function toggleRegisterType(t) { document.getElementById('opt-pessoa').classList.toggle('active',t=='pessoa'); document.getElementById('opt-ong').classList.toggle('active',t=='ong'); document.getElementById('ong-reg-fields').classList.toggle('hidden',t!='ong'); }
+function toggleRegisterType(t) {
+    const toggle = document.getElementById('register-toggle');
+    const optPessoa = document.getElementById('opt-pessoa');
+    const optOng = document.getElementById('opt-ong');
+    const ongFields = document.getElementById('ong-reg-fields');
+    
+    if (t === 'ong') {
+        toggle.classList.add('toggle-right');
+        optOng.classList.add('active');
+        optPessoa.classList.remove('active');
+        ongFields.classList.remove('hidden');
+    } else {
+        toggle.classList.remove('toggle-right');
+        optPessoa.classList.add('active');
+        optOng.classList.remove('active');
+        ongFields.classList.add('hidden');
+    }
+}
 function setupCNPJMask() { const e = document.getElementById('reg-cnpj'); if(e) e.addEventListener('input', ev => { let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); }); }
 
 function seedInitialData() {
