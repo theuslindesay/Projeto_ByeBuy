@@ -1,0 +1,67 @@
+/* Estilo geral da página */
+body {
+  background-color: #1f2229;
+  color: #dddddd;
+  font-family: sans-serif;
+  padding: 20px;
+}
+
+/* O contêiner principal do painel */
+.painel {
+  background-color: #2c313a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 15px 30px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Um bloco de informação dentro do painel */
+.info-bloco {
+  background-color: #3a404d;
+  border-radius: 5px;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+}
+
+h1 {
+  color: #61dafb;
+  text-align: center;
+}
+
+h2 {
+  border-bottom: 1px solid #555;
+  padding-bottom: 5px;
+}
+
+/* --- NOVOS ESTILOS PARA A BARRA DE PROGRESSO --- */
+
+/* A div externa, o "fundo" da barra */
+.barra-progresso-container {
+  background-color: #555;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #444;
+}
+
+/* A div interna, o "preenchimento" colorido */
+.barra-progresso-preenchimento {
+  height: 25px;
+  transition: width 0.5s ease-in-out; /* A animação suave continua aqui */
+}
+
+/* O texto com a porcentagem abaixo da barra */
+.progresso-texto {
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* --- FIM DOS NOVOS ESTILOS --- */
+
+ul, ol {
+  padding-left: 25px;
+}
+
+li {
+  padding: 3px 0;
+}
