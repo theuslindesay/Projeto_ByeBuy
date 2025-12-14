@@ -577,13 +577,14 @@ function loadAdminUsers() {
     }
 
     const container = document.getElementById('admin-users-list');
-    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando...</p>';
+    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando usuários...</p>';
 
-    db.collection("users").get().then((snapshot) => {
+    // Alteração principal: Filtrar apenas onde type == 'Pessoa'
+    db.collection("users").where("type", "==", "Pessoa").get().then((snapshot) => {
         container.innerHTML = '';
         
         if (snapshot.empty) {
-            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhum usuário cadastrado.</p>';
+            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhum doador cadastrado.</p>';
             return;
         }
 
@@ -591,10 +592,8 @@ function loadAdminUsers() {
             const user = doc.data();
             const div = document.createElement('div');
             div.className = 'admin-item';
-            div.setAttribute('data-search', `${user.name} ${user.email} ${user.bairro} ${user.type}`.toLowerCase());
-            
-            const badgeClass = user.type === 'Admin' ? 'admin-badge-admin' : 
-                             user.type === 'ONG' ? 'admin-badge-ong' : 'admin-badge-pessoa';
+            // Adicionamos os dados para a busca funcionar
+            div.setAttribute('data-search', `${user.name} ${user.email} ${user.bairro}`.toLowerCase());
             
             div.innerHTML = `
                 <img src="${user.photoURL || 'https://via.placeholder.com/60'}" 
@@ -602,11 +601,17 @@ function loadAdminUsers() {
                 <div class="admin-item-info">
                     <div class="admin-item-name">
                         ${user.name}
-                        <span class="admin-badge ${badgeClass}">${user.type}</span>
+                        <span class="admin-badge admin-badge-pessoa">Doador</span>
                     </div>
                     <div class="admin-item-details">
                         📧 ${user.email} | 📍 ${user.bairro}
                     </div>
+                </div>
+                <div class="admin-item-actions">
+                    <!-- Opção futura: você pode adicionar botões para editar/banir usuários aqui também -->
+                     <button class="admin-btn admin-btn-delete" onclick="deleteUser('${doc.id}', '${user.name}')">
+                        🗑️ Excluir
+                    </button>
                 </div>
             `;
             
@@ -618,7 +623,26 @@ function loadAdminUsers() {
     });
 }
 
+function deleteUser(userId, userName) {
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        return;
+    }
 
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${userName}"?\n\nEsta ação é irreversível.`)) {
+        return;
+    }
+
+    db.collection("users").doc(userId).delete()
+    .then(() => {
+        alert(`Usuário "${userName}" excluído com sucesso!`);
+        loadAdminUsers(); 
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Erro ao excluir usuário.");
+    });
+}
 function filterAdminONGs() {
     const search = document.getElementById('admin-search-ong').value.toLowerCase();
     document.querySelectorAll('#admin-ongs-list .admin-item').forEach(item => {
