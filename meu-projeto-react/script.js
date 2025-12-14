@@ -12,11 +12,13 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+
 let currentUser = null;
 let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
 let itemsCache = [];
+
 
 window.onload = function() {
     listenToFeed();
@@ -40,10 +42,21 @@ window.onload = function() {
     setupCNPJMask();
 };
 
-function nav(view) { 
+
+function nav(view) {
+    if (view === 'admin' && !isAdmin()) {
+        alert("Acesso negado! Apenas administradores podem acessar esta área.");
+        return;
+    }
+    
     document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active')); 
-    document.getElementById('view-'+view).classList.add('active'); 
+    document.getElementById('view-'+view).classList.add('active');
+    
+    if (view === 'admin') {
+        showAdminTab('ongs');
+    }
 }
+
 
 let baseSize = 16;
 function resize(val) { 
@@ -52,6 +65,12 @@ function resize(val) {
     if(baseSize>24) baseSize=24; 
     document.body.style.fontSize = baseSize+'px'; 
 }
+
+
+function isAdmin() {
+    return currentUser && currentUser.type === 'Admin';
+}
+
 
 function updateAuthUI() {
     if (currentUser) {
@@ -65,8 +84,26 @@ function updateAuthUI() {
             avatar.style.display = 'block';
         }
 
-        document.getElementById('btn-hero-action').classList.remove('hidden');
-        document.getElementById('btn-hero-action').textContent = currentUser.type === 'ONG' ? 'Solicitar Doação' : 'Desapegar (Anunciar)';
+        // Adiciona botão Admin se for administrador
+        const userNav = document.getElementById('user-nav');
+        let adminBtn = document.getElementById('btn-admin-panel');
+        
+        if (isAdmin()) {
+            if (!adminBtn) {
+                adminBtn = document.createElement('button');
+                adminBtn.id = 'btn-admin-panel';
+                adminBtn.className = 'btn-nav';
+                adminBtn.textContent = '⚙️ Admin';
+                adminBtn.onclick = () => nav('admin');
+                userNav.insertBefore(adminBtn, userNav.querySelector('.btn-nav[onclick*="openProfileModal"]'));
+            }
+            document.getElementById('btn-hero-action').classList.add('hidden');
+        } else {
+            if (adminBtn) adminBtn.remove();
+            document.getElementById('btn-hero-action').classList.remove('hidden');
+            document.getElementById('btn-hero-action').textContent = 
+                currentUser.type === 'ONG' ? 'Solicitar Doação' : 'Desapegar (Anunciar)';
+        }
     } else {
         document.getElementById('guest-nav').classList.remove('hidden');
         document.getElementById('user-nav').classList.add('hidden');
@@ -74,6 +111,7 @@ function updateAuthUI() {
         document.getElementById('header-avatar').style.display = 'none';
     }
 }
+
 
 function listenToFeed() {
     const container = document.getElementById('feed-container');
@@ -96,6 +134,7 @@ function listenToFeed() {
     });
 }
 
+
 function renderCurrentFeed() {
     const container = document.getElementById('feed-container');
     container.innerHTML = '';
@@ -106,6 +145,7 @@ function renderCurrentFeed() {
         renderCard(item.id, item);
     });
 }
+
 
 function renderCard(id, item) {
     const container = document.getElementById('feed-container');
@@ -158,6 +198,7 @@ function renderCard(id, item) {
     container.innerHTML += cardHTML;
 }
 
+
 function previewRegisterImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -165,6 +206,7 @@ function previewRegisterImage(input) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
 
 function handleRegister(e) {
     e.preventDefault();
@@ -196,6 +238,7 @@ function handleRegister(e) {
     } else createUserInDB(null);
 }
 
+
 function openChat(itemId, ownerId, itemTitle) {
     if (!currentUser) { alert("Faça login!"); nav('login'); return; }
     if (currentUser.uid === ownerId) { alert("Este item é seu."); return; }
@@ -209,6 +252,7 @@ function openChat(itemId, ownerId, itemTitle) {
     }, { merge: true });
     loadChatUI(itemTitle);
 }
+
 
 function openChatList(itemId) {
     document.getElementById('modal-chat-list').classList.remove('hidden');
@@ -231,6 +275,7 @@ function openChatList(itemId) {
     });
 }
 
+
 function loadChatUI(title) {
     document.getElementById('modal-chat').classList.remove('hidden');
     document.getElementById('chat-title').innerText = title;
@@ -250,6 +295,7 @@ function loadChatUI(title) {
     });
 }
 
+
 function sendMessage(e) {
     e.preventDefault();
     const input = document.getElementById('msg-input');
@@ -260,6 +306,7 @@ function sendMessage(e) {
     });
     input.value = '';
 }
+
 
 function handleCreateItem(e) {
     e.preventDefault();
@@ -280,16 +327,29 @@ function handleCreateItem(e) {
     else save(null);
 }
 
+
 function handleLogin(e) {
     e.preventDefault();
     auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value)
     .then(() => nav('home')).catch(e => alert(e.message));
 }
 
+
 function logout() { auth.signOut().then(() => location.reload()); }
-function donateToItem(id, c, t) { if(!currentUser) return nav('login'); if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); }
+
+
+function donateToItem(id, c, t) { 
+    if(!currentUser) return nav('login'); 
+    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
+}
+
+
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+
 function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
+
+
 function openProfileModal() {
     if (!currentUser) return;
     document.getElementById('modal-profile').classList.remove('hidden');
@@ -311,6 +371,7 @@ function openProfileModal() {
     }
 }
 
+
 function previewProfileImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -320,6 +381,7 @@ function previewProfileImage(input) {
         reader.readAsDataURL(input.files[0]);
     }
 }
+
 
 function handleSaveProfile(e) {
     e.preventDefault();
@@ -354,6 +416,7 @@ function handleSaveProfile(e) {
         saveToDb();
     }
 }
+
 
 function openPublicProfile(uid) {
     if (!uid) return;
@@ -392,6 +455,7 @@ function openPublicProfile(uid) {
     });
 }
 
+
 function toggleRegisterType(t) {
     const toggle = document.getElementById('register-toggle');
     const optPessoa = document.getElementById('opt-pessoa');
@@ -410,7 +474,16 @@ function toggleRegisterType(t) {
         ongFields.classList.add('hidden');
     }
 }
-function setupCNPJMask() { const e = document.getElementById('reg-cnpj'); if(e) e.addEventListener('input', ev => { let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); }); }
+
+
+function setupCNPJMask() { 
+    const e = document.getElementById('reg-cnpj'); 
+    if(e) e.addEventListener('input', ev => { 
+        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
+        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
+    }); 
+}
+
 
 function seedInitialData() {
     const examples = [
@@ -419,4 +492,278 @@ function seedInitialData() {
     ];
     itemsCache = examples;
     renderCurrentFeed();
+}
+
+
+// ==================== FUNÇÕES ADMIN ====================
+
+function showAdminTab(tab) {
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+    
+    if (tab === 'ongs') {
+        document.querySelector('.admin-tab:nth-child(1)').classList.add('active');
+        document.getElementById('admin-tab-ongs').classList.add('active');
+        loadAdminONGs();
+    } else {
+        document.querySelector('.admin-tab:nth-child(2)').classList.add('active');
+        document.getElementById('admin-tab-users').classList.add('active');
+        loadAdminUsers();
+    }
+}
+
+
+function loadAdminONGs() {
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        nav('home');
+        return;
+    }
+
+    const container = document.getElementById('admin-ongs-list');
+    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando...</p>';
+
+    db.collection("users").where("type", "==", "ONG").get().then((snapshot) => {
+        container.innerHTML = '';
+        
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhuma ONG cadastrada.</p>';
+            return;
+        }
+
+        snapshot.forEach((doc) => {
+            const ong = doc.data();
+            const div = document.createElement('div');
+            div.className = 'admin-item';
+            div.setAttribute('data-search', `${ong.name} ${ong.email} ${ong.bairro} ${ong.cnpj || ''}`.toLowerCase());
+            
+            div.innerHTML = `
+                <img src="${ong.photoURL || 'https://via.placeholder.com/60'}" 
+                     class="admin-item-avatar" alt="${ong.name}">
+                <div class="admin-item-info">
+                    <div class="admin-item-name">
+                        ${ong.name}
+                        <span class="admin-badge admin-badge-ong">ONG</span>
+                    </div>
+                    <div class="admin-item-details">
+                        📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'}
+                        ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}
+                    </div>
+                </div>
+                <div class="admin-item-actions">
+                    <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">
+                        ✏️ Editar
+                    </button>
+                    <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">
+                        🗑️ Excluir
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(div);
+        });
+    }).catch(err => {
+        console.error(err);
+        container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar ONGs.</p>';
+    });
+}
+
+
+function loadAdminUsers() {
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        nav('home');
+        return;
+    }
+
+    const container = document.getElementById('admin-users-list');
+    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando...</p>';
+
+    db.collection("users").get().then((snapshot) => {
+        container.innerHTML = '';
+        
+        if (snapshot.empty) {
+            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhum usuário cadastrado.</p>';
+            return;
+        }
+
+        snapshot.forEach((doc) => {
+            const user = doc.data();
+            const div = document.createElement('div');
+            div.className = 'admin-item';
+            div.setAttribute('data-search', `${user.name} ${user.email} ${user.bairro} ${user.type}`.toLowerCase());
+            
+            const badgeClass = user.type === 'Admin' ? 'admin-badge-admin' : 
+                             user.type === 'ONG' ? 'admin-badge-ong' : 'admin-badge-pessoa';
+            
+            div.innerHTML = `
+                <img src="${user.photoURL || 'https://via.placeholder.com/60'}" 
+                     class="admin-item-avatar" alt="${user.name}">
+                <div class="admin-item-info">
+                    <div class="admin-item-name">
+                        ${user.name}
+                        <span class="admin-badge ${badgeClass}">${user.type}</span>
+                    </div>
+                    <div class="admin-item-details">
+                        📧 ${user.email} | 📍 ${user.bairro}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(div);
+        });
+    }).catch(err => {
+        console.error(err);
+        container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar usuários.</p>';
+    });
+}
+
+
+function filterAdminONGs() {
+    const search = document.getElementById('admin-search-ong').value.toLowerCase();
+    document.querySelectorAll('#admin-ongs-list .admin-item').forEach(item => {
+        const text = item.getAttribute('data-search');
+        item.style.display = text.includes(search) ? 'flex' : 'none';
+    });
+}
+
+
+function filterAdminUsers() {
+    const search = document.getElementById('admin-search-user').value.toLowerCase();
+    document.querySelectorAll('#admin-users-list .admin-item').forEach(item => {
+        const text = item.getAttribute('data-search');
+        item.style.display = text.includes(search) ? 'flex' : 'none';
+    });
+}
+
+
+function openAdminEditONG(ongId) {
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        return;
+    }
+
+    db.collection("users").doc(ongId).get().then((doc) => {
+        if (!doc.exists) {
+            alert("ONG não encontrada!");
+            return;
+        }
+
+        const ong = doc.data();
+        document.getElementById('modal-admin-edit-ong').classList.remove('hidden');
+        document.getElementById('admin-edit-ong-id').value = ongId;
+        document.getElementById('admin-ong-name').value = ong.name || '';
+        document.getElementById('admin-ong-email').value = ong.email || '';
+        document.getElementById('admin-ong-cnpj').value = ong.cnpj || '';
+        document.getElementById('admin-ong-type').value = ong.ongType || 'Educação';
+        document.getElementById('admin-ong-bairro').value = ong.bairro || 'Icaraí';
+        document.getElementById('admin-ong-desc').value = ong.description || '';
+        document.getElementById('admin-ong-phone').value = ong.phone || '';
+        document.getElementById('admin-ong-site').value = ong.website || '';
+        document.getElementById('admin-ong-preview').src = ong.photoURL || 'https://via.placeholder.com/100';
+    });
+}
+
+
+function previewAdminONGImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('admin-ong-preview').src = e.target.result;
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+
+function handleAdminEditONG(e) {
+    e.preventDefault();
+    
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        return;
+    }
+
+    const ongId = document.getElementById('admin-edit-ong-id').value;
+    const updateData = {
+        name: document.getElementById('admin-ong-name').value,
+        email: document.getElementById('admin-ong-email').value,
+        cnpj: document.getElementById('admin-ong-cnpj').value,
+        ongType: document.getElementById('admin-ong-type').value,
+        bairro: document.getElementById('admin-ong-bairro').value,
+        description: document.getElementById('admin-ong-desc').value,
+        phone: document.getElementById('admin-ong-phone').value,
+        website: document.getElementById('admin-ong-site').value
+    };
+
+    const fileInput = document.getElementById('admin-ong-image');
+    
+    const saveToDb = () => {
+        db.collection("users").doc(ongId).update(updateData)
+        .then(() => {
+            alert("ONG atualizada com sucesso!");
+            closeModal('modal-admin-edit-ong');
+            loadAdminONGs();
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Erro ao atualizar ONG.");
+        });
+    };
+
+    if (fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            updateData.photoURL = e.target.result;
+            saveToDb();
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+    } else {
+        saveToDb();
+    }
+}
+
+
+function deleteONG(ongId, ongName) {
+    if (!isAdmin()) {
+        alert("Acesso negado!");
+        return;
+    }
+
+    if (!confirm(`Tem certeza que deseja excluir a ONG "${ongName}"?\n\nEsta ação também removerá todos os itens e chats relacionados a esta ONG.`)) {
+        return;
+    }
+
+    // Primeiro, deletar todos os itens da ONG
+    db.collection("items").where("ownerUid", "==", ongId).get()
+    .then((snapshot) => {
+        const batch = db.batch();
+        snapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        return batch.commit();
+    })
+    .then(() => {
+        // Deletar chats relacionados
+        return db.collection("chats").where("ownerId", "==", ongId).get();
+    })
+    .then((snapshot) => {
+        const batch = db.batch();
+        snapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        return batch.commit();
+    })
+    .then(() => {
+        // Finalmente, deletar a ONG
+        return db.collection("users").doc(ongId).delete();
+    })
+    .then(() => {
+        alert(`ONG "${ongName}" excluída com sucesso!`);
+        loadAdminONGs();
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Erro ao excluir ONG.");
+    });
 }

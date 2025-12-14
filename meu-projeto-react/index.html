@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bye Buy - Niterói</title>
-    <link rel="icon" type="image/png" href="meu-projeto-react\dinossauro_byebuy-removebg-preview.png">
+    <link rel="icon" type="image/png" href="dinossauro_byebuy-removebg-preview.png">
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -139,6 +139,40 @@
                 </form>
             </div>
         </section>
+
+    <section id="view-admin" class="view-section">
+    <div class="admin-container">
+        <h2 style="color: var(--primary-color); margin-bottom: 2rem;">Painel Administrativo</h2>
+        
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="showAdminTab('ongs')">
+                Gerenciar ONGs
+            </button>
+            <button class="admin-tab" onclick="showAdminTab('users')">
+                Gerenciar Usuários
+            </button>
+        </div>
+
+        <!-- Tab de ONGs -->
+        <div id="admin-tab-ongs" class="admin-tab-content active">
+            <div class="admin-search">
+                <input type="text" id="admin-search-ong" placeholder="Buscar ONG..." onkeyup="filterAdminONGs()">
+            </div>
+            <div id="admin-ongs-list" class="admin-list">
+                <p style="text-align:center; color:#999;">Carregando ONGs...</p>
+            </div>
+        </div>
+
+        <div id="admin-tab-users" class="admin-tab-content">
+            <div class="admin-search">
+                <input type="text" id="admin-search-user" placeholder="Buscar usuário..." onkeyup="filterAdminUsers()">
+            </div>
+            <div id="admin-users-list" class="admin-list">
+                <p style="text-align:center; color:#999;">Carregando usuários...</p>
+            </div>
+        </div>
+    </div>
+</section>
     </main>
 
     <div id="modal-item" class="modal hidden">
@@ -260,6 +294,82 @@
             </form>
         </div>
     </div>
+    
+    <div id="modal-admin-edit-ong" class="modal hidden">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('modal-admin-edit-ong')">&times;</span>
+        <h2 style="color: var(--primary-color);">Editar ONG</h2>
+        <form onsubmit="handleAdminEditONG(event)">
+            <input type="hidden" id="admin-edit-ong-id">
+            
+            <div style="text-align:center; margin-bottom:20px;">
+                <img id="admin-ong-preview" src="https://via.placeholder.com/100" 
+                     style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                <div style="margin-top:10px;">
+                    <label for="admin-ong-image" style="cursor:pointer; color:var(--primary-color); font-weight:bold;">
+                        Alterar Foto
+                    </label>
+                    <input type="file" id="admin-ong-image" accept="image/*" style="display:none;" 
+                           onchange="previewAdminONGImage(this)">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Nome da ONG</label>
+                <input type="text" id="admin-ong-name" required>
+            </div>
+
+            <div class="form-group">
+                <label>E-mail</label>
+                <input type="email" id="admin-ong-email" required>
+            </div>
+
+            <div class="form-group">
+                <label>CNPJ</label>
+                <input type="text" id="admin-ong-cnpj" maxlength="18">
+            </div>
+
+            <div class="form-group">
+                <label>Tipo de ONG</label>
+                <select id="admin-ong-type">
+                    <option value="Educação">Educação</option>
+                    <option value="Animais">Animais</option>
+                    <option value="Saúde">Saúde</option>
+                    <option value="Assistência Social">Assistência Social</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Bairro</label>
+                <select id="admin-ong-bairro">
+                    <option>Icaraí</option>
+                    <option>Centro</option>
+                    <option>Fonseca</option>
+                    <option>Região Oceânica</option>
+                    <option>Santa Rosa</option>
+                    <option>São Francisco</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Descrição / Missão</label>
+                <textarea id="admin-ong-desc" rows="3"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Telefone / WhatsApp</label>
+                <input type="text" id="admin-ong-phone">
+            </div>
+
+            <div class="form-group">
+                <label>Site / Redes Sociais</label>
+                <input type="text" id="admin-ong-site">
+            </div>
+
+            <button type="submit" class="btn-submit btn-green">Salvar Alterações</button>
+        </form>
+    </div>
+</div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
