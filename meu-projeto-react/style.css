@@ -67,21 +67,8 @@ main { flex: 1; padding: 2rem; max-width: 1100px; margin: 0 auto; width: 100%; p
     border-radius: 50px; 
     margin-bottom: 2rem; 
     position: relative; 
-}
-
-.toggle-option { 
-    flex: 1; 
-    padding: 10px; 
-    cursor: pointer; 
-    font-weight: bold; 
-    color: #888; 
-    z-index: 2; 
-    text-align: center; 
-    transition: color 0.3s;
-}
-
-.toggle-option.active { 
-    color: white; 
+    cursor: pointer;   
+    user-select: none;  
 }
 
 .toggle-bg { 
@@ -90,19 +77,33 @@ main { flex: 1; padding: 2rem; max-width: 1100px; margin: 0 auto; width: 100%; p
     left: 5px; 
     width: 50%; 
     height: calc(100% - 10px); 
-    background-color: var(--secondary-color); /* Começa VERDE para Doador */
+    background-color: var(--secondary-color); 
     border-radius: 40px; 
     transition: all 0.3s ease;
     z-index: 1; 
 }
 
-/* Quando "Sou ONG" (direita) está ativo, o fundo fica AZUL */
+.toggle-option { 
+    flex: 1; 
+    padding: 10px; 
+    font-weight: bold; 
+    color: #888; 
+    text-align: center; 
+    transition: color 0.3s;
+    
+    position: relative; 
+    z-index: 10; 
+}
+
+.toggle-option.active { 
+    color: white; 
+}
+
 .toggle-right .toggle-bg { 
     transform: translateX(100%); 
     background-color: var(--primary-color); 
 }
 
-/* Estilos para Painel Admin */
 .admin-container {
     max-width: 1000px;
     margin: 0 auto;

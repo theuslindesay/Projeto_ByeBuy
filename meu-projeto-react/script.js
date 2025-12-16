@@ -12,13 +12,12 @@ if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-
 let currentUser = null;
 let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
 let itemsCache = [];
-
+let baseSize = 16;
 
 window.onload = function() {
     listenToFeed();
@@ -27,7 +26,17 @@ window.onload = function() {
         if (user) {
             db.collection("users").doc(user.uid).get().then((doc) => {
                 if(doc.exists) {
-                    currentUser = { uid: user.uid, ...doc.data() };
+                    const userData = doc.data();
+
+                    if (userData.type === 'ONG' && userData.status === 'pending') {
+                        alert("Sua conta ainda está em análise pelos administradores. Aguarde a aprovação.");
+                        auth.signOut();
+                        currentUser = null;
+                        updateAuthUI();
+                        return;
+                    }
+
+                    currentUser = { uid: user.uid, ...userData };
                     updateAuthUI();
                     renderCurrentFeed(); 
                 }
@@ -41,7 +50,6 @@ window.onload = function() {
 
     setupCNPJMask();
 };
-
 
 function nav(view) {
     if (view === 'admin' && !isAdmin()) {
@@ -57,8 +65,6 @@ function nav(view) {
     }
 }
 
-
-let baseSize = 16;
 function resize(val) { 
     baseSize += val; 
     if(baseSize<12) baseSize=12; 
@@ -66,11 +72,9 @@ function resize(val) {
     document.body.style.fontSize = baseSize+'px'; 
 }
 
-
 function isAdmin() {
     return currentUser && currentUser.type === 'Admin';
 }
-
 
 function updateAuthUI() {
     if (currentUser) {
@@ -84,7 +88,6 @@ function updateAuthUI() {
             avatar.style.display = 'block';
         }
 
-        // Adiciona botão Admin se for administrador
         const userNav = document.getElementById('user-nav');
         let adminBtn = document.getElementById('btn-admin-panel');
         
@@ -112,10 +115,7 @@ function updateAuthUI() {
     }
 }
 
-
 function listenToFeed() {
-    const container = document.getElementById('feed-container');
-    
     if (feedListener) feedListener();
 
     feedListener = db.collection("items").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
@@ -134,7 +134,6 @@ function listenToFeed() {
     });
 }
 
-
 function renderCurrentFeed() {
     const container = document.getElementById('feed-container');
     container.innerHTML = '';
@@ -144,27 +143,47 @@ function renderCurrentFeed() {
     itemsCache.forEach(item => {
         renderCard(item.id, item);
     });
+    
+    filterFeed();
 }
 
+function filterFeed() {
+    const term = document.getElementById('feed-search').value.toLowerCase();
+    const cards = document.querySelectorAll('#feed-container .card');
+
+    cards.forEach(card => {
+        const text = card.getAttribute('data-search');
+        if (text.includes(term)) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
 
 function renderCard(id, item) {
     const container = document.getElementById('feed-container');
     
-    let isOwner = false;
-    let isAdminUser = currentUser && currentUser.type === 'Admin';
-
-    if (currentUser && (item.ownerUid === currentUser.uid)) {
-        isOwner = true;
-    }
+    let isOwner = currentUser && (item.ownerUid === currentUser.uid);
+    let isAdminUser = isAdmin();
 
     const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
     let btnHTML = '';
     
     if (isOwner) {
-        btnHTML = `<button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>`;
+        btnHTML = `
+            <button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>
+            ${item.type === 'need' && item.current < item.total ? 
+                `<button class="btn-submit btn-green" style="margin-top:5px;" onclick="registerDonationReceipt('${id}', ${item.current}, ${item.total})">
+                    ✅ Confirmar Recebimento (+1)
+                </button>` : ''
+            }
+        `;
     } else {
         if (item.type === 'need') {
-            btnHTML = `<button class="btn-submit" onclick="donateToItem('${id}', ${item.current}, ${item.total})">Doar para este pedido ❤️</button>`;
+            btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
+                Tenho este item! (Combinar) 💬
+            </button>`;
         } else {
             btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
         }
@@ -182,7 +201,6 @@ function renderCard(id, item) {
 
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
-
     const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
 
     let cardHTML = `<article class="card" data-search="${searchText}">`;
@@ -214,16 +232,26 @@ function renderCard(id, item) {
     container.innerHTML += cardHTML;
 }
 
-
-
-function previewRegisterImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
-        reader.readAsDataURL(input.files[0]);
+function registerDonationReceipt(itemId, current, total) {
+    if (current >= total) {
+        alert("Meta já atingida!");
+        return;
+    }
+    
+    if (confirm("Você confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
+        db.collection("items").doc(itemId).update({
+            current: current + 1
+        }).then(() => {
+            alert("Recebimento registrado com sucesso!");
+        }).catch(err => alert("Erro: " + err.message));
     }
 }
 
+function handleLogin(e) {
+    e.preventDefault();
+    auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value)
+    .then(() => nav('home')).catch(e => alert(e.message));
+}
 
 function handleRegister(e) {
     e.preventDefault();
@@ -232,20 +260,48 @@ function handleRegister(e) {
     const name = document.getElementById('reg-name').value;
     const isOng = document.getElementById('opt-ong').classList.contains('active');
     const cnpj = document.getElementById('reg-cnpj').value;
+    
+    const phone = document.getElementById('reg-phone') ? document.getElementById('reg-phone').value : '';
+    const site = document.getElementById('reg-site') ? document.getElementById('reg-site').value : '';
+    const desc = document.getElementById('reg-desc') ? document.getElementById('reg-desc').value : '';
+    
     const fileInput = document.getElementById('reg-image');
 
-    if (isOng && cnpj.length < 18) { alert("CNPJ inválido."); return; }
+    if (isOng) {
+        if (cnpj.length < 14) { alert("CNPJ inválido."); return; }
+
+    }
 
     const createUserInDB = (photoDataUrl) => {
         auth.createUserWithEmailAndPassword(email, pass).then((cred) => {
             const data = { 
                 name, email, bairro: document.getElementById('reg-bairro').value, 
                 type: isOng ? 'ONG' : 'Pessoa',
-                photoURL: photoDataUrl || 'https://via.placeholder.com/100'
+                photoURL: photoDataUrl || 'https://via.placeholder.com/100',
+                status: isOng ? 'pending' : 'active' 
             };
-            if (isOng) { data.cnpj = cnpj; data.ongType = document.getElementById('reg-type-ong').value; }
+            
+            if (isOng) { 
+                data.cnpj = cnpj; 
+                data.ongType = document.getElementById('reg-type-ong').value;
+                if(phone) data.phone = phone;
+                if(site) data.website = site;
+                if(desc) data.description = desc;
+            }
+            
             return db.collection("users").doc(cred.user.uid).set(data);
-        }).then(() => { alert("Conta criada!"); nav('home'); }).catch(e => alert(e.message));
+        }).then(() => { 
+            auth.signOut(); 
+
+            if(isOng) {
+ 
+                document.getElementById('success-ong-name').innerText = name;
+                document.getElementById('modal-cadastro-sucesso').classList.remove('hidden');
+            } else {
+                alert("Conta criada com sucesso!");
+                nav('login'); 
+            }
+        }).catch(e => alert(e.message));
     };
 
     if (fileInput.files[0]) {
@@ -255,75 +311,23 @@ function handleRegister(e) {
     } else createUserInDB(null);
 }
 
-
-function openChat(itemId, ownerId, itemTitle) {
-    if (!currentUser) { alert("Faça login!"); nav('login'); return; }
-    if (currentUser.uid === ownerId) { alert("Este item é seu."); return; }
-    currentChatId = `${itemId}_${currentUser.uid}`;
-    db.collection("chats").doc(currentChatId).set({
-        participants: [currentUser.uid, ownerId],
-        itemId, ownerId, interestedId: currentUser.uid,
-        interestedName: currentUser.name,
-        interestedAvatar: currentUser.photoURL,
-        itemTitle, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    loadChatUI(itemTitle);
+function previewRegisterImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
+        reader.readAsDataURL(input.files[0]);
+    }
 }
 
-
-function openChatList(itemId) {
-    document.getElementById('modal-chat-list').classList.remove('hidden');
-    const container = document.getElementById('chat-list-container');
-    container.innerHTML = '<p>Carregando...</p>';
-    db.collection("chats").where("itemId", "==", itemId).get().then((snap) => {
-        container.innerHTML = '';
-        const myChats = [];
-        snap.forEach(doc => { if(doc.data().ownerId === currentUser.uid) myChats.push({id:doc.id, ...doc.data()}); });
-        
-        if (myChats.length === 0) { container.innerHTML = '<p style="text-align:center;">Sem interessados.</p>'; return; }
-        
-        myChats.forEach(chat => {
-            const div = document.createElement('div');
-            div.className = 'chat-list-item';
-            div.innerHTML = `<span>${chat.interestedName}</span><small style="color:blue">Abrir</small>`;
-            div.onclick = () => { closeModal('modal-chat-list'); currentChatId = chat.id; loadChatUI(chat.itemTitle); };
-            container.appendChild(div);
-        });
-    });
+function setupCNPJMask() { 
+    const e = document.getElementById('reg-cnpj'); 
+    if(e) e.addEventListener('input', ev => { 
+        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
+        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
+    }); 
 }
 
-
-function loadChatUI(title) {
-    document.getElementById('modal-chat').classList.remove('hidden');
-    document.getElementById('chat-title').innerText = title;
-    const container = document.getElementById('chat-messages');
-    container.innerHTML = 'Carregando...';
-    if (unsubscribeChat) unsubscribeChat();
-    unsubscribeChat = db.collection("chats").doc(currentChatId).collection("messages").orderBy("timestamp", "asc").onSnapshot(snap => {
-        container.innerHTML = '';
-        snap.forEach(doc => {
-            const msg = doc.data();
-            const div = document.createElement('div');
-            div.className = `msg-row ${msg.senderId === currentUser.uid ? 'sent' : 'received'}`;
-            div.innerHTML = `<div class="message-bubble">${msg.text}</div>`;
-            container.appendChild(div);
-        });
-        container.scrollTop = container.scrollHeight;
-    });
-}
-
-
-function sendMessage(e) {
-    e.preventDefault();
-    const input = document.getElementById('msg-input');
-    const text = input.value.trim();
-    if (!text) return;
-    db.collection("chats").doc(currentChatId).collection("messages").add({
-        text, senderId: currentUser.uid, senderAvatar: currentUser.photoURL, timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    input.value = '';
-}
-
+function logout() { auth.signOut().then(() => location.reload()); }
 
 function handleCreateItem(e) {
     e.preventDefault();
@@ -344,38 +348,12 @@ function handleCreateItem(e) {
     else save(null);
 }
 
-
-function handleLogin(e) {
-    e.preventDefault();
-    auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value)
-    .then(() => nav('home')).catch(e => alert(e.message));
-}
-
-
-function logout() { auth.signOut().then(() => location.reload()); }
-
-
-function donateToItem(id, c, t) { 
-    if(!currentUser) return nav('login'); 
-    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
-}
-
-
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-
-function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
-
-
 function openProfileModal() {
     if (!currentUser) return;
     document.getElementById('modal-profile').classList.remove('hidden');
     document.getElementById('prof-name').value = currentUser.name || '';
     document.getElementById('prof-bairro').value = currentUser.bairro || '';
-    
-    if (currentUser.photoURL) {
-        document.getElementById('prof-preview').src = currentUser.photoURL;
-    }
+    if (currentUser.photoURL) document.getElementById('prof-preview').src = currentUser.photoURL;
 
     const ongFields = document.getElementById('prof-ong-fields');
     if (currentUser.type === 'ONG') {
@@ -387,18 +365,6 @@ function openProfileModal() {
         ongFields.classList.add('hidden');
     }
 }
-
-
-function previewProfileImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('prof-preview').src = e.target.result;
-        }
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
 
 function handleSaveProfile(e) {
     e.preventDefault();
@@ -434,6 +400,15 @@ function handleSaveProfile(e) {
     }
 }
 
+function previewProfileImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('prof-preview').src = e.target.result;
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
 
 function openPublicProfile(uid) {
     if (!uid) return;
@@ -472,47 +447,70 @@ function openPublicProfile(uid) {
     });
 }
 
-
-function toggleRegisterType(t) {
-    const toggle = document.getElementById('register-toggle');
-    const optPessoa = document.getElementById('opt-pessoa');
-    const optOng = document.getElementById('opt-ong');
-    const ongFields = document.getElementById('ong-reg-fields');
-    
-    if (t === 'ong') {
-        toggle.classList.add('toggle-right');
-        optOng.classList.add('active');
-        optPessoa.classList.remove('active');
-        ongFields.classList.remove('hidden');
-    } else {
-        toggle.classList.remove('toggle-right');
-        optPessoa.classList.add('active');
-        optOng.classList.remove('active');
-        ongFields.classList.add('hidden');
-    }
+function openChat(itemId, ownerId, itemTitle) {
+    if (!currentUser) { alert("Faça login!"); nav('login'); return; }
+    if (currentUser.uid === ownerId) { alert("Este item é seu."); return; }
+    currentChatId = `${itemId}_${currentUser.uid}`;
+    db.collection("chats").doc(currentChatId).set({
+        participants: [currentUser.uid, ownerId],
+        itemId, ownerId, interestedId: currentUser.uid,
+        interestedName: currentUser.name,
+        interestedAvatar: currentUser.photoURL,
+        itemTitle, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    loadChatUI(itemTitle);
 }
 
-
-function setupCNPJMask() { 
-    const e = document.getElementById('reg-cnpj'); 
-    if(e) e.addEventListener('input', ev => { 
-        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
-        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
-    }); 
+function openChatList(itemId) {
+    document.getElementById('modal-chat-list').classList.remove('hidden');
+    const container = document.getElementById('chat-list-container');
+    container.innerHTML = '<p>Carregando...</p>';
+    db.collection("chats").where("itemId", "==", itemId).get().then((snap) => {
+        container.innerHTML = '';
+        const myChats = [];
+        snap.forEach(doc => { if(doc.data().ownerId === currentUser.uid) myChats.push({id:doc.id, ...doc.data()}); });
+        
+        if (myChats.length === 0) { container.innerHTML = '<p style="text-align:center;">Sem interessados.</p>'; return; }
+        
+        myChats.forEach(chat => {
+            const div = document.createElement('div');
+            div.className = 'chat-list-item';
+            div.innerHTML = `<span>${chat.interestedName}</span><small style="color:blue">Abrir</small>`;
+            div.onclick = () => { closeModal('modal-chat-list'); currentChatId = chat.id; loadChatUI(chat.itemTitle); };
+            container.appendChild(div);
+        });
+    });
 }
 
-
-function seedInitialData() {
-    const examples = [
-        { id: 'ex1', title: 'Ração de Gato (Exemplo)', category: 'Animais', org: 'Sistema ByeBuy', bairro: 'Icaraí', type: 'donation', condition: 'Novo', image: null },
-        { id: 'ex2', title: 'Cestas Básicas (Exemplo)', category: 'Alimentos', org: 'ONG Esperança', bairro: 'Centro', type: 'need', total: 100, current: 45, image: null }
-    ];
-    itemsCache = examples;
-    renderCurrentFeed();
+function loadChatUI(title) {
+    document.getElementById('modal-chat').classList.remove('hidden');
+    document.getElementById('chat-title').innerText = title;
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = 'Carregando...';
+    if (unsubscribeChat) unsubscribeChat();
+    unsubscribeChat = db.collection("chats").doc(currentChatId).collection("messages").orderBy("timestamp", "asc").onSnapshot(snap => {
+        container.innerHTML = '';
+        snap.forEach(doc => {
+            const msg = doc.data();
+            const div = document.createElement('div');
+            div.className = `msg-row ${msg.senderId === currentUser.uid ? 'sent' : 'received'}`;
+            div.innerHTML = `<div class="message-bubble">${msg.text}</div>`;
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    });
 }
 
-
-// ==================== FUNÇÕES ADMIN ====================
+function sendMessage(e) {
+    e.preventDefault();
+    const input = document.getElementById('msg-input');
+    const text = input.value.trim();
+    if (!text) return;
+    db.collection("chats").doc(currentChatId).collection("messages").add({
+        text, senderId: currentUser.uid, senderAvatar: currentUser.photoURL, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    input.value = '';
+}
 
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -529,167 +527,114 @@ function showAdminTab(tab) {
     }
 }
 
-
 function loadAdminONGs() {
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        nav('home');
-        return;
-    }
-
+    if (!isAdmin()) { alert("Acesso negado!"); nav('home'); return; }
     const container = document.getElementById('admin-ongs-list');
     container.innerHTML = '<p style="text-align:center; color:#999;">Carregando...</p>';
 
     db.collection("users").where("type", "==", "ONG").get().then((snapshot) => {
         container.innerHTML = '';
-        
-        if (snapshot.empty) {
-            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhuma ONG cadastrada.</p>';
-            return;
-        }
+        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhuma ONG cadastrada.</p>'; return; }
 
         snapshot.forEach((doc) => {
             const ong = doc.data();
+            const isPending = ong.status === 'pending';
+            const statusBadge = isPending 
+                ? `<span style="background:orange; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">PENDENTE</span>` 
+                : `<span style="background:green; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">ATIVO</span>`;
+
+            const approveBtn = isPending 
+                ? `<button class="admin-btn" style="background:green; color:white;" onclick="approveONG('${doc.id}', '${ong.name}')">✅ Aprovar</button>` 
+                : '';
+
             const div = document.createElement('div');
             div.className = 'admin-item';
             div.setAttribute('data-search', `${ong.name} ${ong.email} ${ong.bairro} ${ong.cnpj || ''}`.toLowerCase());
             
             div.innerHTML = `
-                <img src="${ong.photoURL || 'https://via.placeholder.com/60'}" 
-                     class="admin-item-avatar" alt="${ong.name}">
+                <img src="${ong.photoURL || 'https://via.placeholder.com/60'}" class="admin-item-avatar" alt="${ong.name}">
                 <div class="admin-item-info">
-                    <div class="admin-item-name">
-                        ${ong.name}
-                        <span class="admin-badge admin-badge-ong">ONG</span>
-                    </div>
-                    <div class="admin-item-details">
-                        📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'}
-                        ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}
-                    </div>
+                    <div class="admin-item-name">${ong.name} <span class="admin-badge admin-badge-ong">ONG</span> ${statusBadge}</div>
+                    <div class="admin-item-details">📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'} ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}</div>
                 </div>
                 <div class="admin-item-actions">
-                    <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">
-                        ✏️ Editar
-                    </button>
-                    <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">
-                        🗑️ Excluir
-                    </button>
+                    ${approveBtn}
+                    <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">✏️ Editar</button>
+                    <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir</button>
                 </div>
             `;
-            
             container.appendChild(div);
         });
-    }).catch(err => {
-        console.error(err);
-        container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar ONGs.</p>';
     });
 }
 
+function approveONG(uid, name) {
+    if(!isAdmin()) return;
+    if(confirm(`Aprovar o cadastro da ONG ${name}?`)) {
+        db.collection("users").doc(uid).update({ status: 'active' }).then(() => {
+            alert("ONG Aprovada com sucesso!");
+            loadAdminONGs();
+        }).catch(err => alert("Erro ao aprovar: " + err.message));
+    }
+}
 
 function loadAdminUsers() {
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        nav('home');
-        return;
-    }
-
+    if (!isAdmin()) { alert("Acesso negado!"); nav('home'); return; }
     const container = document.getElementById('admin-users-list');
     container.innerHTML = '<p style="text-align:center; color:#999;">Carregando usuários...</p>';
 
-    // Alteração principal: Filtrar apenas onde type == 'Pessoa'
     db.collection("users").where("type", "==", "Pessoa").get().then((snapshot) => {
         container.innerHTML = '';
-        
-        if (snapshot.empty) {
-            container.innerHTML = '<p style="text-align:center; color:#999;">Nenhum doador cadastrado.</p>';
-            return;
-        }
+        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhum doador cadastrado.</p>'; return; }
 
         snapshot.forEach((doc) => {
             const user = doc.data();
             const div = document.createElement('div');
             div.className = 'admin-item';
-            // Adicionamos os dados para a busca funcionar
             div.setAttribute('data-search', `${user.name} ${user.email} ${user.bairro}`.toLowerCase());
             
             div.innerHTML = `
-                <img src="${user.photoURL || 'https://via.placeholder.com/60'}" 
-                     class="admin-item-avatar" alt="${user.name}">
+                <img src="${user.photoURL || 'https://via.placeholder.com/60'}" class="admin-item-avatar" alt="${user.name}">
                 <div class="admin-item-info">
-                    <div class="admin-item-name">
-                        ${user.name}
-                        <span class="admin-badge admin-badge-pessoa">Doador</span>
-                    </div>
-                    <div class="admin-item-details">
-                        📧 ${user.email} | 📍 ${user.bairro}
-                    </div>
+                    <div class="admin-item-name">${user.name} <span class="admin-badge admin-badge-pessoa">Doador</span></div>
+                    <div class="admin-item-details">📧 ${user.email} | 📍 ${user.bairro}</div>
                 </div>
                 <div class="admin-item-actions">
-                    <!-- Opção futura: você pode adicionar botões para editar/banir usuários aqui também -->
-                     <button class="admin-btn admin-btn-delete" onclick="deleteUser('${doc.id}', '${user.name}')">
-                        🗑️ Excluir
-                    </button>
+                    <button class="admin-btn admin-btn-delete" onclick="deleteUser('${doc.id}', '${user.name}')">🗑️ Excluir</button>
                 </div>
             `;
-            
             container.appendChild(div);
         });
-    }).catch(err => {
-        console.error(err);
-        container.innerHTML = '<p style="text-align:center; color:red;">Erro ao carregar usuários.</p>';
     });
 }
 
 function deleteUser(userId, userName) {
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        return;
-    }
-
-    if (!confirm(`Tem certeza que deseja excluir o usuário "${userName}"?\n\nEsta ação é irreversível.`)) {
-        return;
-    }
-
-    db.collection("users").doc(userId).delete()
-    .then(() => {
-        alert(`Usuário "${userName}" excluído com sucesso!`);
+    if (!isAdmin()) return;
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${userName}"?\n\nEsta ação é irreversível.`)) return;
+    db.collection("users").doc(userId).delete().then(() => {
+        alert(`Usuário "${userName}" excluído!`);
         loadAdminUsers(); 
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Erro ao excluir usuário.");
-    });
+    }).catch(err => alert("Erro ao excluir usuário."));
 }
+
 function filterAdminONGs() {
     const search = document.getElementById('admin-search-ong').value.toLowerCase();
     document.querySelectorAll('#admin-ongs-list .admin-item').forEach(item => {
-        const text = item.getAttribute('data-search');
-        item.style.display = text.includes(search) ? 'flex' : 'none';
+        item.style.display = item.getAttribute('data-search').includes(search) ? 'flex' : 'none';
     });
 }
-
 
 function filterAdminUsers() {
     const search = document.getElementById('admin-search-user').value.toLowerCase();
     document.querySelectorAll('#admin-users-list .admin-item').forEach(item => {
-        const text = item.getAttribute('data-search');
-        item.style.display = text.includes(search) ? 'flex' : 'none';
+        item.style.display = item.getAttribute('data-search').includes(search) ? 'flex' : 'none';
     });
 }
 
-
 function openAdminEditONG(ongId) {
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        return;
-    }
-
+    if (!isAdmin()) return;
     db.collection("users").doc(ongId).get().then((doc) => {
-        if (!doc.exists) {
-            alert("ONG não encontrada!");
-            return;
-        }
-
+        if (!doc.exists) { alert("ONG não encontrada!"); return; }
         const ong = doc.data();
         document.getElementById('modal-admin-edit-ong').classList.remove('hidden');
         document.getElementById('admin-edit-ong-id').value = ongId;
@@ -705,25 +650,17 @@ function openAdminEditONG(ongId) {
     });
 }
 
-
 function previewAdminONGImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('admin-ong-preview').src = e.target.result;
-        };
+        reader.onload = function(e) { document.getElementById('admin-ong-preview').src = e.target.result; };
         reader.readAsDataURL(input.files[0]);
     }
 }
 
-
 function handleAdminEditONG(e) {
     e.preventDefault();
-    
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        return;
-    }
+    if (!isAdmin()) return;
 
     const ongId = document.getElementById('admin-edit-ong-id').value;
     const updateData = {
@@ -740,96 +677,81 @@ function handleAdminEditONG(e) {
     const fileInput = document.getElementById('admin-ong-image');
     
     const saveToDb = () => {
-        db.collection("users").doc(ongId).update(updateData)
-        .then(() => {
+        db.collection("users").doc(ongId).update(updateData).then(() => {
             alert("ONG atualizada com sucesso!");
             closeModal('modal-admin-edit-ong');
             loadAdminONGs();
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Erro ao atualizar ONG.");
-        });
+        }).catch(err => alert("Erro ao atualizar ONG."));
     };
 
     if (fileInput.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            updateData.photoURL = e.target.result;
-            saveToDb();
-        };
+        reader.onload = function(e) { updateData.photoURL = e.target.result; saveToDb(); };
         reader.readAsDataURL(fileInput.files[0]);
-    } else {
-        saveToDb();
-    }
-}
-
-function filterFeed() {
-    const term = document.getElementById('feed-search').value.toLowerCase();
-    const cards = document.querySelectorAll('#feed-container .card');
-
-    cards.forEach(card => {
-        const text = card.getAttribute('data-search');
-        if (text.includes(term)) {
-            card.style.display = 'flex';
-        } else {
-            card.style.display = 'none';
-        }
-    });
+    } else { saveToDb(); }
 }
 
 function adminDeleteItem(itemId, itemTitle) {
     if (!isAdmin()) return alert("Acesso negado.");
-
     if (confirm(`ADMIN: Tem certeza que deseja excluir o item "${itemTitle}"?`)) {
-        db.collection("items").doc(itemId).delete()
-        .then(() => {
-            alert("Item excluído com sucesso!");
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Erro ao excluir item.");
-        });
+        db.collection("items").doc(itemId).delete().then(() => alert("Item excluído com sucesso!"));
     }
 }
 
 function deleteONG(ongId, ongName) {
-    if (!isAdmin()) {
-        alert("Acesso negado!");
-        return;
-    }
-
-    if (!confirm(`Tem certeza que deseja excluir a ONG "${ongName}"?\n\nEsta ação também removerá todos os itens e chats relacionados a esta ONG.`)) {
-        return;
-    }
+    if (!isAdmin()) return;
+    if (!confirm(`Tem certeza que deseja excluir a ONG "${ongName}"?\n\nEsta ação removerá itens e chats relacionados.`)) return;
 
     db.collection("items").where("ownerUid", "==", ongId).get()
     .then((snapshot) => {
         const batch = db.batch();
-        snapshot.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
+        snapshot.forEach((doc) => batch.delete(doc.ref));
         return batch.commit();
     })
-    .then(() => {
-        return db.collection("chats").where("ownerId", "==", ongId).get();
-    })
+    .then(() => db.collection("chats").where("ownerId", "==", ongId).get())
     .then((snapshot) => {
         const batch = db.batch();
-        snapshot.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
+        snapshot.forEach((doc) => batch.delete(doc.ref));
         return batch.commit();
     })
-    .then(() => {
-        return db.collection("users").doc(ongId).delete();
-    })
+    .then(() => db.collection("users").doc(ongId).delete())
     .then(() => {
         alert(`ONG "${ongName}" excluída com sucesso!`);
         loadAdminONGs();
-    })
-    .catch(err => {
-        console.error(err);
-        alert("Erro ao excluir ONG.");
     });
+}
+
+function toggleRegisterType(t) {
+    const toggle = document.getElementById('register-toggle');
+    const optPessoa = document.getElementById('opt-pessoa');
+    const optOng = document.getElementById('opt-ong');
+    const ongFields = document.getElementById('ong-reg-fields');
+    
+    if (t === 'ong') {
+        toggle.classList.add('toggle-right');
+        optOng.classList.add('active');
+        optPessoa.classList.remove('active');
+        ongFields.classList.remove('hidden'); 
+    } else {
+        toggle.classList.remove('toggle-right');
+        optPessoa.classList.add('active');
+        optOng.classList.remove('active');
+        ongFields.classList.add('hidden'); 
+    }
+}
+
+function donateToItem(id, c, t) { 
+    if(!currentUser) return nav('login'); 
+    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
+function seedInitialData() {
+    const examples = [
+        { id: 'ex1', title: 'Ração de Gato (Exemplo)', category: 'Animais', org: 'Sistema ByeBuy', bairro: 'Icaraí', type: 'donation', condition: 'Novo', image: null },
+        { id: 'ex2', title: 'Cestas Básicas (Exemplo)', category: 'Alimentos', org: 'ONG Esperança', bairro: 'Centro', type: 'need', total: 100, current: 45, image: null }
+    ];
+    itemsCache = examples;
+    renderCurrentFeed();
 }
