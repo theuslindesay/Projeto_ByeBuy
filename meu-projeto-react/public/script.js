@@ -80,7 +80,7 @@ function updateAuthUI() {
     if (currentUser) {
         document.getElementById('guest-nav').classList.add('hidden');
         document.getElementById('user-nav').classList.remove('hidden');
-        document.getElementById('user-greeting').innerText = `Olá, ${currentUser.name.split(' ')[0]}`;
+        document.getElementById('user-greeting').innerText = `Olá, ${currentUser.name ? currentUser.name.split(' ')[0] : 'Usuário'}`;
         
         if(currentUser.photoURL) {
             const avatar = document.getElementById('header-avatar');
@@ -247,10 +247,32 @@ function registerDonationReceipt(itemId, current, total) {
     }
 }
 
+// =====================================================================
+// NOVA FUNÇÃO DE LOGIN COM LINK MÁGICO (Substituiu a antiga com senha)
+// =====================================================================
 function handleLogin(e) {
     e.preventDefault();
-    auth.signInWithEmailAndPassword(document.getElementById('login-email').value, document.getElementById('login-pass').value)
-    .then(() => nav('home')).catch(e => alert(e.message));
+    const emailDigitado = document.getElementById('login-email').value;
+
+    if (!emailDigitado) {
+        alert("Por favor, digite um e-mail válido!");
+        return;
+    }
+
+    const actionCodeSettings = {
+        url: 'https://projeto-bye-buy.vercel.app', 
+        handleCodeInApp: true,
+    };
+
+    auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
+        .then(() => {
+            window.localStorage.setItem('emailForSignIn', emailDigitado);
+            alert('Link mágico enviado! Verifique sua caixa de entrada (e a pasta de Spam).');
+        })
+        .catch((error) => {
+            console.error("Erro ao enviar o link:", error);
+            alert("Erro ao enviar o e-mail: " + error.message);
+        });
 }
 
 function handleRegister(e) {
@@ -269,7 +291,6 @@ function handleRegister(e) {
 
     if (isOng) {
         if (cnpj.length < 14) { alert("CNPJ inválido."); return; }
-
     }
 
     const createUserInDB = (photoDataUrl) => {
@@ -294,7 +315,6 @@ function handleRegister(e) {
             auth.signOut(); 
 
             if(isOng) {
- 
                 document.getElementById('success-ong-name').innerText = name;
                 document.getElementById('modal-cadastro-sucesso').classList.remove('hidden');
             } else {
@@ -754,4 +774,34 @@ function seedInitialData() {
     ];
     itemsCache = examples;
     renderCurrentFeed();
+}
+
+// =====================================================================
+// PARTE 2: CAPTURAR O RETORNO DO USUÁRIO PELO LINK
+// (Roda automaticamente quando a página carrega)
+// =====================================================================
+
+if (auth.isSignInWithEmailLink(window.location.href)) {
+    let emailSalvo = window.localStorage.getItem('emailForSignIn');
+    
+    if (!emailSalvo) {
+        // Se a pessoa abriu o link num dispositivo diferente, pede para confirmar
+        emailSalvo = window.prompt('Por favor, confirme seu e-mail para finalizar o login:');
+    }
+
+    if (emailSalvo) {
+        auth.signInWithEmailLink(emailSalvo, window.location.href)
+            .then((result) => {
+                window.localStorage.removeItem('emailForSignIn');
+                alert('Show! Você entrou com sucesso.');
+                
+                // Limpa a URL e redireciona para a home
+                window.history.replaceState(null, '', window.location.pathname);
+                nav('home');
+            })
+            .catch((error) => {
+                console.error("Erro ao fazer login pelo link:", error);
+                alert("Erro ao logar: " + error.message);
+            });
+    }
 }
