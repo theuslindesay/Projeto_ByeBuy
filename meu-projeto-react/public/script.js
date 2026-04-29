@@ -267,7 +267,7 @@ function handleLogin(e) {
     auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
         .then(() => {
             window.localStorage.setItem('emailForSignIn', emailDigitado);
-            alert('Link mágico enviado! Verifique sua caixa de entrada (e a pasta de Spam).');
+            alert('Um link de acesso foi enviado para seu email! Verifique sua caixa de entrada (e a pasta de Spam).');
         })
         .catch((error) => {
             console.error("Erro ao enviar o link:", error);
@@ -793,7 +793,7 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
         auth.signInWithEmailLink(emailSalvo, window.location.href)
             .then((result) => {
                 window.localStorage.removeItem('emailForSignIn');
-                alert('Show! Você entrou com sucesso.');
+                alert(' Você entrou com sucesso.');
                 
                 // Limpa a URL e redireciona para a home
                 window.history.replaceState(null, '', window.location.pathname);
