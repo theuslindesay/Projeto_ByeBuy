@@ -17,11 +17,13 @@ let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
 let globalChatsListener = null; 
+let ongPostsListener = null; // Listener da nova Comunidade
 let itemsCache = [];
 let baseSize = 16;
 
 window.onload = function() {
     listenToFeed();
+    listenToOngFeed(); // Inicia o carregamento das postagens da ONG
 
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -109,11 +111,20 @@ function updateAuthUI() {
             document.getElementById('btn-hero-action').textContent = 
                 currentUser.type === 'ONG' ? 'Solicitar Doação' : 'Desapegar (Anunciar)';
         }
+
+        // MOSTRA BOTAO DA COMUNIDADE SO PARA ONGS
+        if (currentUser.type === 'ONG') {
+            document.getElementById('btn-create-post').classList.remove('hidden');
+        } else {
+            document.getElementById('btn-create-post').classList.add('hidden');
+        }
+
     } else {
         document.getElementById('guest-nav').classList.remove('hidden');
         document.getElementById('user-nav').classList.add('hidden');
         document.getElementById('btn-hero-action').classList.add('hidden');
         document.getElementById('header-avatar').style.display = 'none';
+        document.getElementById('btn-create-post').classList.add('hidden');
     }
 }
 
@@ -258,6 +269,97 @@ function registerDonationReceipt(itemId, current, total) {
         }).catch(err => alert("Erro: " + err.message));
     }
 }
+
+// =====================================================================
+// COMUNIDADE DAS ONGS (NOVO)
+// =====================================================================
+
+function listenToOngFeed() {
+    if (ongPostsListener) ongPostsListener();
+    
+    ongPostsListener = db.collection("ong_posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+        const container = document.getElementById('ong-feed-container');
+        container.innerHTML = '';
+        
+        if (snapshot.empty) { 
+            container.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">Nenhuma postagem ainda.</p>';
+            return; 
+        }
+        
+        snapshot.forEach((doc) => { 
+            const post = { id: doc.id, ...doc.data() };
+            renderOngPost(post, container);
+        });
+    });
+}
+
+function renderOngPost(post, container) {
+    const dateObj = new Date(post.createdAt);
+    const dateStr = dateObj.toLocaleDateString() + ' às ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let isOwner = currentUser && (post.ongId === currentUser.uid);
+    let isAdminUser = isAdmin();
+    let deleteBtn = '';
+    
+    if (isOwner || isAdminUser) {
+        deleteBtn = `<button onclick="deleteOngPost('${post.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:1.2rem;" title="Apagar Postagem">🗑️</button>`;
+    }
+
+    const imgHtml = post.image ? `<img src="${post.image}" class="ong-post-image">` : '';
+
+    const html = `
+        <div class="ong-post-card">
+            <div class="ong-post-header">
+                <img src="${post.ongAvatar}" class="ong-post-avatar" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">
+                <div style="flex:1;">
+                    <div class="ong-post-name" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">${post.ongName}</div>
+                    <div class="ong-post-date">${dateStr}</div>
+                </div>
+                ${deleteBtn}
+            </div>
+            ${imgHtml}
+            <div class="ong-post-body">${post.content}</div>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+function handleCreateOngPost(e) {
+    e.preventDefault();
+    const content = document.getElementById('post-content').value;
+    const newPost = {
+        ongId: currentUser.uid,
+        ongName: currentUser.name,
+        ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
+        content: content,
+        createdAt: Date.now()
+    };
+
+    const save = (img) => {
+        newPost.image = img;
+        db.collection("ong_posts").add(newPost).then(() => { 
+            closeModal('modal-ong-post'); 
+            document.getElementById('post-content').value = '';
+            document.getElementById('post-image').value = '';
+            alert("Postagem publicada com sucesso!"); 
+        }).catch(err => alert("Erro: " + err.message));
+    };
+    
+    const f = document.getElementById('post-image').files[0];
+    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
+    else save(null);
+}
+
+function deleteOngPost(id) {
+    if(confirm("Deseja mesmo apagar esta postagem da Comunidade?")) {
+        db.collection("ong_posts").doc(id).delete();
+    }
+}
+
+function openOngPostModal() {
+    document.getElementById('modal-ong-post').classList.remove('hidden');
+}
+
 
 // =====================================================================
 // AUTENTICAÇÃO
@@ -636,7 +738,7 @@ function showNotification(mensagem, chatId, titulo) {
 }
 
 // =====================================================================
-// FUNÇÕES DE EDITAR E APAGAR ITENS
+// FUNÇÕES DE EDITAR E APAGAR ITENS DO MURAL
 // =====================================================================
 function deleteMyItem(itemId, itemTitle) {
     if(confirm(`Tem a certeza que deseja apagar o item "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {

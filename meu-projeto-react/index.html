@@ -16,7 +16,10 @@
         </a>
         
         <div class="nav-buttons">
-            <div class="font-controls">
+            <button class="btn-nav btn-outline" style="border:none; text-decoration: underline; text-underline-offset: 5px;" onclick="nav('home')">Mural Solidário</button>
+            <button class="btn-nav btn-outline" style="border:none; text-decoration: underline; text-underline-offset: 5px;" onclick="nav('ong-feed')">Comunidade ONGs</button>
+            
+            <div class="font-controls" style="margin-left:10px; border-left: 2px solid #eee; padding-left:15px;">
                 <button onclick="resize(2)" title="Aumentar Fonte">A+</button>
                 <button onclick="resize(-2)" title="Diminuir Fonte">A-</button>
             </div>
@@ -43,7 +46,7 @@
         <section id="view-home" class="view-section active">
             <div class="hero">
                 <h1>Conectando doações a quem precisa em Niterói</h1>
-                <p>Escolha como você quer ajudar ou ser ajudado hoje.</p>
+                <p>Escolha como quer ajudar ou ser ajudado hoje.</p>
             </div>
 
             <div class="filtros-container">
@@ -67,6 +70,18 @@
             
             <div class="grid-cards" id="feed-container">
                 <p style="text-align:center; width:100%; color:#999;">A carregar itens...</p>
+            </div>
+        </section>
+
+        <section id="view-ong-feed" class="view-section">
+            <div class="hero" style="padding-bottom: 2rem;">
+                <h1>Comunidade</h1>
+                <p>Acompanhe campanhas, resultados e eventos das instituições de Niterói.</p>
+                <button id="btn-create-post" class="btn-large btn-blue hidden" onclick="openOngPostModal()" style="margin-top:20px; background: var(--secondary-color);">+ Nova Postagem da ONG</button>
+            </div>
+            
+            <div id="ong-feed-container" style="max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px;">
+                <p style="text-align:center; color:#999;">A carregar o feed da comunidade...</p>
             </div>
         </section>
 
@@ -256,7 +271,25 @@
                     <label>Quantidade Necessária (Meta)</label>
                     <input type="number" id="item-total" value="1" min="1">
                 </div>
-                <button type="submit" class="btn-submit">Publicar</button>
+                <button type="submit" class="btn-submit">Publicar no Mural</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-ong-post" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modal-ong-post')">&times;</span>
+            <h2 style="color: var(--primary-color); margin-bottom: 1rem;">Nova Postagem na Comunidade</h2>
+            <form onsubmit="handleCreateOngPost(event)">
+                <div class="form-group">
+                    <label>Mensagem / Aviso / Resultado</label>
+                    <textarea id="post-content" rows="4" placeholder="O que está a acontecer na sua ONG? Campanhas, agradecimentos, eventos..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Foto da Ação (Opcional)</label>
+                    <input type="file" id="post-image" accept="image/*">
+                </div>
+                <button type="submit" class="btn-submit" style="background: var(--secondary-color);">Publicar no Feed</button>
             </form>
         </div>
     </div>
@@ -272,12 +305,10 @@
                     <label>Título do Item</label>
                     <input type="text" id="edit-item-title" required>
                 </div>
-                
                 <div class="form-group">
                     <label>Nova Foto (Opcional)</label>
                     <input type="file" id="edit-item-image" accept="image/*">
                 </div>
-                
                 <div class="form-group">
                     <label>Categoria</label>
                     <select id="edit-item-category">
@@ -288,7 +319,6 @@
                         <option>Animais</option>
                     </select>
                 </div>
-                
                 <div id="edit-condition-field" class="form-group">
                     <label>Condição</label>
                     <select id="edit-item-condition">
@@ -298,12 +328,10 @@
                         <option value="Para Conserto">Para Conserto</option>
                     </select>
                 </div>
-                
                 <div id="edit-ong-fields" class="form-group hidden">
                     <label>Quantidade Necessária (Meta)</label>
                     <input type="number" id="edit-item-total" min="1">
                 </div>
-                
                 <button type="submit" class="btn-submit" style="background: #f39c12;">Salvar Alterações</button>
             </form>
         </div>
