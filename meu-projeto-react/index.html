@@ -66,7 +66,7 @@
             </div>
             
             <div class="grid-cards" id="feed-container">
-                <p style="text-align:center; width:100%; color:#999;">Carregando itens...</p>
+                <p style="text-align:center; width:100%; color:#999;">A carregar itens...</p>
             </div>
         </section>
 
@@ -74,7 +74,7 @@
             <div class="admin-container">
                 <h2 style="color: var(--primary-color); margin-bottom: 2rem;">Minhas Conversas</h2>
                 <div id="messages-list-container" class="admin-list">
-                    <p style="text-align:center; color:#999;">Carregando mensagens...</p>
+                    <p style="text-align:center; color:#999;">A carregar mensagens...</p>
                 </div>
             </div>
         </section>
@@ -180,12 +180,8 @@
                 <h2 style="color: var(--primary-color); margin-bottom: 2rem;">Painel Administrativo</h2>
                 
                 <div class="admin-tabs">
-                    <button class="admin-tab active" onclick="showAdminTab('ongs')">
-                        Gerenciar ONGs
-                    </button>
-                    <button class="admin-tab" onclick="showAdminTab('users')">
-                        Gerenciar Usuários
-                    </button>
+                    <button class="admin-tab active" onclick="showAdminTab('ongs')">Gerenciar ONGs</button>
+                    <button class="admin-tab" onclick="showAdminTab('users')">Gerenciar Utilizadores</button>
                 </div>
 
                 <div id="admin-tab-ongs" class="admin-tab-content active">
@@ -193,7 +189,7 @@
                         <input type="text" id="admin-search-ong" placeholder="Buscar ONG..." onkeyup="filterAdminONGs()">
                     </div>
                     <div id="admin-ongs-list" class="admin-list">
-                        <p style="text-align:center; color:#999;">Carregando ONGs...</p>
+                        <p style="text-align:center; color:#999;">A carregar ONGs...</p>
                     </div>
                 </div>
 
@@ -202,7 +198,7 @@
                         <input type="text" id="admin-search-user" placeholder="Buscar doador por nome, email ou bairro..." onkeyup="filterAdminUsers()">
                     </div>
                     <div id="admin-users-list" class="admin-list">
-                        <p style="text-align:center; color:#999;">Carregando doadores...</p>
+                        <p style="text-align:center; color:#999;">A carregar doadores...</p>
                     </div>
                 </div>
             </div>
@@ -212,14 +208,14 @@
     <div id="modal-cadastro-sucesso" class="modal hidden" style="background: rgba(255,255,255,0.95);">
         <div class="modal-content" style="text-align: center; max-width: 500px; padding: 40px; border: 2px solid var(--secondary-color);">
             <div style="font-size: 5rem; margin-bottom: 20px;">🛡️</div>
-            <h2 style="color: var(--primary-color); font-size: 1.8rem; margin-bottom: 10px;">Cadastro Recebido!</h2>
+            <h2 style="color: var(--primary-color); font-size: 1.8rem; margin-bottom: 10px;">Registo Recebido!</h2>
             <p style="font-size: 1.1rem; color: #444; margin-bottom: 20px;">Olá, <strong id="success-ong-name">ONG</strong>!</p>
             <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid var(--primary-color); text-align: left;">
                 <p><strong>Status Atual:</strong> <span style="color: orange; font-weight: bold;">EM ANÁLISE</span> ⏳</p>
                 <hr style="border: 0; border-top: 1px solid #ddd; margin: 10px 0;">
-                <p style="font-size: 0.9rem; color: #666;">Para garantir a segurança, verificamos manualmente os dados.</p>
+                <p style="font-size: 0.9rem; color: #666;">Para garantir a segurança dos doadores, a nossa equipa verifica manualmente os dados de todas as instituições.</p>
             </div>
-            <p style="margin-bottom: 30px; color: #666;">Você receberá a aprovação em breve. Tente fazer login mais tarde.</p>
+            <p style="margin-bottom: 30px; color: #666;">Receberá a aprovação em breve. Tente fazer login mais tarde para verificar o seu status.</p>
             <button class="btn-submit" onclick="closeModal('modal-cadastro-sucesso'); nav('home');">Entendido, voltar ao início</button>
         </div>
     </div>
@@ -379,7 +375,7 @@
             </div>
             <div id="chat-messages" class="chat-messages"></div>
             <form class="chat-input-area" onsubmit="sendMessage(event)">
-                <input type="text" id="msg-input" placeholder="Digite a sua mensagem..." autocomplete="off">
+                <input type="text" id="msg-input" placeholder="Escreva a sua mensagem..." autocomplete="off">
                 <button type="submit">Enviar</button>
             </form>
         </div>

@@ -117,6 +117,9 @@ function updateAuthUI() {
     }
 }
 
+// =====================================================================
+// RENDERIZAÇÃO DO MURAL SOLIDÁRIO
+// =====================================================================
 function listenToFeed() {
     if (feedListener) feedListener();
 
@@ -174,6 +177,7 @@ function renderCard(id, item) {
 
     const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
     let btnHTML = '';
+    let deleteBtnHTML = '';
     
     if (isOwner) {
         btnHTML = `
@@ -196,16 +200,15 @@ function renderCard(id, item) {
         } else {
             btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
         }
-    }
 
-    let deleteBtnHTML = '';
-    if (isAdminUser) {
-        deleteBtnHTML = `
-            <button onclick="adminDeleteItem('${id}', '${item.title}')" 
-                    style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; margin-top:10px; font-size:0.8rem; width:100%;">
-                🗑️ Admin: Excluir Item
-            </button>
-        `;
+        if (isAdminUser) {
+            deleteBtnHTML = `
+                <div style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed #eee;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px; font-size:0.8rem;" onclick="openEditItemModal('${id}')">🛠️ Admin: Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px; font-size:0.8rem;" onclick="adminDeleteItem('${id}', '${item.title}')">🗑️ Admin: Excluir</button>
+                </div>
+            `;
+        }
     }
 
     const donorUid = item.ownerUid || '';
@@ -247,7 +250,7 @@ function registerDonationReceipt(itemId, current, total) {
         alert("Meta já atingida!");
         return;
     }
-    if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
+    if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isto irá atualizar a barra de progresso no mural.")) {
         db.collection("items").doc(itemId).update({
             current: current + 1
         }).then(() => {
@@ -633,7 +636,7 @@ function showNotification(mensagem, chatId, titulo) {
 }
 
 // =====================================================================
-// FUNÇÕES DE EDITAR E APAGAR MEUS ITENS
+// FUNÇÕES DE EDITAR E APAGAR ITENS
 // =====================================================================
 function deleteMyItem(itemId, itemTitle) {
     if(confirm(`Tem a certeza que deseja apagar o item "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
@@ -651,7 +654,7 @@ function openEditItemModal(itemId) {
     document.getElementById('edit-item-title').value = item.title;
     document.getElementById('edit-item-category').value = item.category;
 
-    if (currentUser.type === 'ONG') {
+    if (item.type === 'need') {
         document.getElementById('edit-condition-field').classList.add('hidden');
         document.getElementById('edit-ong-fields').classList.remove('hidden');
         document.getElementById('edit-item-total').value = item.total;
@@ -668,12 +671,15 @@ function handleUpdateItem(e) {
     e.preventDefault();
     const itemId = document.getElementById('edit-item-id').value;
     
+    const itemOriginal = itemsCache.find(i => i.id === itemId);
+    if(!itemOriginal) return;
+
     const updateData = {
         title: document.getElementById('edit-item-title').value,
         category: document.getElementById('edit-item-category').value,
     };
 
-    if (currentUser.type === 'ONG') {
+    if (itemOriginal.type === 'need') {
         updateData.total = parseInt(document.getElementById('edit-item-total').value);
     } else {
         updateData.condition = document.getElementById('edit-item-condition').value;
