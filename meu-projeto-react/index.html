@@ -48,10 +48,19 @@
             <div class="filtros-container">
                 <h2>Mural Solidário</h2>
                 
-                <div style="flex: 1; max-width: 400px; margin: 0 20px;">
-                    <input type="text" id="feed-search" placeholder="Buscar por título, categoria ou bairro..." 
+                <div style="flex: 1; max-width: 550px; margin: 0 20px; display: flex; gap: 10px;">
+                    <input type="text" id="feed-search" placeholder="Buscar por título ou bairro..." 
                            onkeyup="filterFeed()" 
-                           style="width: 100%; padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc;">
+                           style="flex: 1; padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc;">
+                    
+                    <select id="feed-category" onchange="filterFeed()" style="padding: 10px 15px; border-radius: 20px; border: 1px solid #ccc; cursor: pointer;">
+                        <option value="">Todas as categorias</option>
+                        <option value="móveis">Móveis</option>
+                        <option value="roupas">Roupas</option>
+                        <option value="educação">Educação</option>
+                        <option value="alimentos">Alimentos</option>
+                        <option value="animais">Animais</option>
+                    </select>
                 </div>
 
                 <button id="btn-hero-action" class="btn-large btn-blue hidden" onclick="openItemModal()">Anunciar</button>
@@ -196,7 +205,6 @@
         </section>
     </main>
 
-        <!-- TELA DE CONFIRMAÇÃO DE CADASTRO (PENDÊNCIA) - ADICIONE ISTO -->
     <div id="modal-cadastro-sucesso" class="modal hidden" style="background: rgba(255,255,255,0.95);">
         <div class="modal-content" style="text-align: center; max-width: 500px; padding: 40px; border: 2px solid var(--secondary-color);">
             

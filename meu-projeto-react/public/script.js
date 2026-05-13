@@ -149,11 +149,18 @@ function renderCurrentFeed() {
 
 function filterFeed() {
     const term = document.getElementById('feed-search').value.toLowerCase();
+    const selectedCategory = document.getElementById('feed-category').value.toLowerCase();
+    
     const cards = document.querySelectorAll('#feed-container .card');
 
     cards.forEach(card => {
-        const text = card.getAttribute('data-search');
-        if (text.includes(term)) {
+        const textData = card.getAttribute('data-search') || '';
+        const categoryData = card.getAttribute('data-category') || '';
+        
+        const matchesText = textData.includes(term);
+        const matchesCategory = (selectedCategory === "") || (categoryData === selectedCategory);
+
+        if (matchesText && matchesCategory) {
             card.style.display = 'flex';
         } else {
             card.style.display = 'none';
@@ -202,8 +209,11 @@ function renderCard(id, item) {
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
     const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
+    
+    // Adicionamos o atributo data-category aqui para o filtro
+    const categoryAttr = item.category ? item.category.toLowerCase() : '';
 
-    let cardHTML = `<article class="card" data-search="${searchText}">`;
+    let cardHTML = `<article class="card" data-search="${searchText}" data-category="${categoryAttr}">`;
     cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
     cardHTML += `<div class="card-content">`;
     
@@ -248,7 +258,7 @@ function registerDonationReceipt(itemId, current, total) {
 }
 
 // =====================================================================
-// NOVA FUNÇÃO DE LOGIN COM LINK MÁGICO (Substituiu a antiga com senha)
+// FUNÇÃO DE LOGIN COM LINK MÁGICO
 // =====================================================================
 function handleLogin(e) {
     e.preventDefault();
@@ -777,15 +787,13 @@ function seedInitialData() {
 }
 
 // =====================================================================
-// PARTE 2: CAPTURAR O RETORNO DO USUÁRIO PELO LINK
-// (Roda automaticamente quando a página carrega)
+// CAPTURAR O RETORNO DO USUÁRIO PELO LINK
 // =====================================================================
 
 if (auth.isSignInWithEmailLink(window.location.href)) {
     let emailSalvo = window.localStorage.getItem('emailForSignIn');
     
     if (!emailSalvo) {
-        // Se a pessoa abriu o link num dispositivo diferente, pede para confirmar
         emailSalvo = window.prompt('Por favor, confirme seu e-mail para finalizar o login:');
     }
 
@@ -795,7 +803,6 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
                 window.localStorage.removeItem('emailForSignIn');
                 alert(' Você entrou com sucesso.');
                 
-                // Limpa a URL e redireciona para a home
                 window.history.replaceState(null, '', window.location.pathname);
                 nav('home');
             })

@@ -286,3 +286,34 @@ main { flex: 1; padding: 2rem; max-width: 1100px; margin: 0 auto; width: 100%; p
 .chat-list-item { padding: 15px; border: 1px solid #eee; border-radius: 12px; cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff; }
 .chat-list-item:hover { background: #f9fcfd; border-color: var(--primary-color); }
 .chat-item-name { font-weight: bold; color: var(--text-primary); }
+/* Estilos para a barra de pesquisa e filtro de categoria */
+.search-wrapper {
+    flex: 1;
+    max-width: 550px;
+    margin: 0 20px;
+    display: flex;
+    gap: 10px;
+}
+
+#feed-search, #feed-category {
+    padding: 10px 15px;
+    border-radius: 20px;
+    border: 1px solid #ccc;
+    font-family: 'Nunito', sans-serif;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+#feed-search {
+    flex: 1;
+}
+
+#feed-category {
+    cursor: pointer;
+    background-color: white;
+}
+
+#feed-search:focus, #feed-category:focus {
+    border-color: var(--primary-color);
+}
