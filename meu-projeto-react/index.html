@@ -74,7 +74,7 @@
             <div class="admin-container">
                 <h2 style="color: var(--primary-color); margin-bottom: 2rem;">Minhas Conversas</h2>
                 <div id="messages-list-container" class="admin-list">
-                    <p style="text-align:center; color:#999;">A carregar mensagens...</p>
+                    <p style="text-align:center; color:#999;">Carregando mensagens...</p>
                 </div>
             </div>
         </section>
@@ -87,11 +87,7 @@
                         <label>E-mail</label>
                         <input type="email" id="login-email" required>
                     </div>
-                    <div class="form-group">
-                        <label>Senha</label>
-                        <input type="password" id="login-pass" required>
-                    </div>
-                    <button type="submit" class="btn-submit">Entrar</button>
+                    <button type="submit" class="btn-submit">Entrar com Link Mágico</button>
                     <p style="margin-top: 1rem;">
                         Não tem conta? <a href="#" onclick="nav('register')" style="color:var(--primary-color);">Cadastre-se</a>
                     </p>
@@ -215,33 +211,18 @@
 
     <div id="modal-cadastro-sucesso" class="modal hidden" style="background: rgba(255,255,255,0.95);">
         <div class="modal-content" style="text-align: center; max-width: 500px; padding: 40px; border: 2px solid var(--secondary-color);">
-            
             <div style="font-size: 5rem; margin-bottom: 20px;">🛡️</div>
-            
             <h2 style="color: var(--primary-color); font-size: 1.8rem; margin-bottom: 10px;">Cadastro Recebido!</h2>
-            
-            <p style="font-size: 1.1rem; color: #444; margin-bottom: 20px;">
-                Olá, <strong id="success-ong-name">ONG</strong>!
-            </p>
-
+            <p style="font-size: 1.1rem; color: #444; margin-bottom: 20px;">Olá, <strong id="success-ong-name">ONG</strong>!</p>
             <div style="background: #f0f8ff; padding: 20px; border-radius: 10px; margin-bottom: 25px; border-left: 5px solid var(--primary-color); text-align: left;">
                 <p><strong>Status Atual:</strong> <span style="color: orange; font-weight: bold;">EM ANÁLISE</span> ⏳</p>
                 <hr style="border: 0; border-top: 1px solid #ddd; margin: 10px 0;">
-                <p style="font-size: 0.9rem; color: #666;">
-                    Para garantir a segurança dos doadores, nossa equipa verifica manualmente os dados de todas as instituições.
-                </p>
+                <p style="font-size: 0.9rem; color: #666;">Para garantir a segurança, verificamos manualmente os dados.</p>
             </div>
-
-            <p style="margin-bottom: 30px; color: #666;">
-                Receberá a aprovação em breve. Tente fazer login mais tarde para verificar o seu status.
-            </p>
-
-            <button class="btn-submit" onclick="closeModal('modal-cadastro-sucesso'); nav('home');">
-                Entendido, voltar ao início
-            </button>
+            <p style="margin-bottom: 30px; color: #666;">Você receberá a aprovação em breve. Tente fazer login mais tarde.</p>
+            <button class="btn-submit" onclick="closeModal('modal-cadastro-sucesso'); nav('home');">Entendido, voltar ao início</button>
         </div>
     </div>
-
 
     <div id="modal-item" class="modal hidden">
         <div class="modal-content">
@@ -266,24 +247,68 @@
                         <option>Animais</option>
                     </select>
                 </div>
-                <div id="condition-field">
-                    <div class="form-group">
-                        <label>Condição</label>
-                        <select id="item-condition">
-                            <option value="Novo">Novo</option>
-                            <option value="Seminovo">Seminovo</option>
-                            <option value="Usado - Bom">Usado (Bom estado)</option>
-                            <option value="Para Conserto">Para Conserto</option>
-                        </select>
-                    </div>
+                <div id="condition-field" class="form-group">
+                    <label>Condição</label>
+                    <select id="item-condition">
+                        <option value="Novo">Novo</option>
+                        <option value="Seminovo">Seminovo</option>
+                        <option value="Usado - Bom">Usado (Bom estado)</option>
+                        <option value="Para Conserto">Para Conserto</option>
+                    </select>
                 </div>
-                <div id="ong-fields" class="hidden">
-                    <div class="form-group">
-                        <label>Quantidade Necessária (Meta)</label>
-                        <input type="number" id="item-total" value="1" min="1">
-                    </div>
+                <div id="ong-fields" class="form-group hidden">
+                    <label>Quantidade Necessária (Meta)</label>
+                    <input type="number" id="item-total" value="1" min="1">
                 </div>
                 <button type="submit" class="btn-submit">Publicar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-edit-item" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modal-edit-item')">&times;</span>
+            <h2 style="color: var(--primary-color); margin-bottom: 1rem;">Editar Item</h2>
+            <form onsubmit="handleUpdateItem(event)">
+                <input type="hidden" id="edit-item-id">
+                
+                <div class="form-group">
+                    <label>Título do Item</label>
+                    <input type="text" id="edit-item-title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Nova Foto (Opcional)</label>
+                    <input type="file" id="edit-item-image" accept="image/*">
+                </div>
+                
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select id="edit-item-category">
+                        <option>Móveis</option>
+                        <option>Roupas</option>
+                        <option>Educação</option>
+                        <option>Alimentos</option>
+                        <option>Animais</option>
+                    </select>
+                </div>
+                
+                <div id="edit-condition-field" class="form-group">
+                    <label>Condição</label>
+                    <select id="edit-item-condition">
+                        <option value="Novo">Novo</option>
+                        <option value="Seminovo">Seminovo</option>
+                        <option value="Usado - Bom">Usado (Bom estado)</option>
+                        <option value="Para Conserto">Para Conserto</option>
+                    </select>
+                </div>
+                
+                <div id="edit-ong-fields" class="form-group hidden">
+                    <label>Quantidade Necessária (Meta)</label>
+                    <input type="number" id="edit-item-total" min="1">
+                </div>
+                
+                <button type="submit" class="btn-submit" style="background: #f39c12;">Salvar Alterações</button>
             </form>
         </div>
     </div>
@@ -352,10 +377,7 @@
                 <h3 id="chat-title">Chat</h3>
                 <span class="close-chat" onclick="closeModal('modal-chat')">&times;</span>
             </div>
-            
-            <div id="chat-messages" class="chat-messages">
-            </div>
-            
+            <div id="chat-messages" class="chat-messages"></div>
             <form class="chat-input-area" onsubmit="sendMessage(event)">
                 <input type="text" id="msg-input" placeholder="Digite a sua mensagem..." autocomplete="off">
                 <button type="submit">Enviar</button>
@@ -369,34 +391,16 @@
             <h2 style="color: var(--primary-color);">Editar ONG</h2>
             <form onsubmit="handleAdminEditONG(event)">
                 <input type="hidden" id="admin-edit-ong-id">
-                
                 <div style="text-align:center; margin-bottom:20px;">
-                    <img id="admin-ong-preview" src="https://via.placeholder.com/100" 
-                         style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
+                    <img id="admin-ong-preview" src="https://via.placeholder.com/100" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color);">
                     <div style="margin-top:10px;">
-                        <label for="admin-ong-image" style="cursor:pointer; color:var(--primary-color); font-weight:bold;">
-                            Alterar Foto
-                        </label>
-                        <input type="file" id="admin-ong-image" accept="image/*" style="display:none;" 
-                               onchange="previewAdminONGImage(this)">
+                        <label for="admin-ong-image" style="cursor:pointer; color:var(--primary-color); font-weight:bold;">Alterar Foto</label>
+                        <input type="file" id="admin-ong-image" accept="image/*" style="display:none;" onchange="previewAdminONGImage(this)">
                     </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Nome da ONG</label>
-                    <input type="text" id="admin-ong-name" required>
-                </div>
-
-                <div class="form-group">
-                    <label>E-mail</label>
-                    <input type="email" id="admin-ong-email" required>
-                </div>
-
-                <div class="form-group">
-                    <label>CNPJ</label>
-                    <input type="text" id="admin-ong-cnpj" maxlength="18">
-                </div>
-
+                <div class="form-group"><label>Nome da ONG</label><input type="text" id="admin-ong-name" required></div>
+                <div class="form-group"><label>E-mail</label><input type="email" id="admin-ong-email" required></div>
+                <div class="form-group"><label>CNPJ</label><input type="text" id="admin-ong-cnpj" maxlength="18"></div>
                 <div class="form-group">
                     <label>Tipo de ONG</label>
                     <select id="admin-ong-type">
@@ -406,7 +410,6 @@
                         <option value="Assistência Social">Assistência Social</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label>Bairro</label>
                     <select id="admin-ong-bairro">
@@ -418,22 +421,9 @@
                         <option>São Francisco</option>
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label>Descrição / Missão</label>
-                    <textarea id="admin-ong-desc" rows="3"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Telefone / WhatsApp</label>
-                    <input type="text" id="admin-ong-phone">
-                </div>
-
-                <div class="form-group">
-                    <label>Site / Redes Sociais</label>
-                    <input type="text" id="admin-ong-site">
-                </div>
-
+                <div class="form-group"><label>Descrição / Missão</label><textarea id="admin-ong-desc" rows="3"></textarea></div>
+                <div class="form-group"><label>Telefone / WhatsApp</label><input type="text" id="admin-ong-phone"></div>
+                <div class="form-group"><label>Site / Redes Sociais</label><input type="text" id="admin-ong-site"></div>
                 <button type="submit" class="btn-submit btn-green">Salvar Alterações</button>
             </form>
         </div>
@@ -450,7 +440,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    
     <script src="script.js"></script>
 </body>
 </html>

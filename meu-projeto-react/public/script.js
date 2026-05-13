@@ -16,7 +16,7 @@ let currentUser = null;
 let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
-let globalChatsListener = null; // Variável para as notificações de mensagens
+let globalChatsListener = null; 
 let itemsCache = [];
 let baseSize = 16;
 
@@ -40,7 +40,7 @@ window.onload = function() {
                     currentUser = { uid: user.uid, ...userData };
                     updateAuthUI();
                     renderCurrentFeed(); 
-                    listenToMyChats(); // Começa a ouvir as mensagens recebidas
+                    listenToMyChats(); 
                 }
             });
         } else {
@@ -122,11 +122,7 @@ function listenToFeed() {
 
     feedListener = db.collection("items").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
         itemsCache = [];
-        
-        if (snapshot.empty) { 
-            seedInitialData(); 
-            return; 
-        }
+        if (snapshot.empty) return; 
         
         snapshot.forEach((doc) => { 
             itemsCache.push({ id: doc.id, ...doc.data() });
@@ -187,6 +183,10 @@ function renderCard(id, item) {
                     ✅ Confirmar Recebimento (+1)
                 </button>` : ''
             }
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
+                <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Apagar</button>
+            </div>
         `;
     } else {
         if (item.type === 'need') {
@@ -247,7 +247,6 @@ function registerDonationReceipt(itemId, current, total) {
         alert("Meta já atingida!");
         return;
     }
-    
     if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
         db.collection("items").doc(itemId).update({
             current: current + 1
@@ -257,6 +256,9 @@ function registerDonationReceipt(itemId, current, total) {
     }
 }
 
+// =====================================================================
+// AUTENTICAÇÃO
+// =====================================================================
 function handleLogin(e) {
     e.preventDefault();
     const emailDigitado = document.getElementById('login-email').value;
@@ -296,8 +298,8 @@ function handleRegister(e) {
     
     const fileInput = document.getElementById('reg-image');
 
-    if (isOng) {
-        if (cnpj.length < 14) { alert("CNPJ inválido."); return; }
+    if (isOng && cnpj.length < 14) { 
+        alert("CNPJ inválido."); return; 
     }
 
     const createUserInDB = (photoDataUrl) => {
@@ -356,6 +358,9 @@ function setupCNPJMask() {
 
 function logout() { auth.signOut().then(() => location.reload()); }
 
+// =====================================================================
+// CRIAÇÃO DE ITENS E PERFIL
+// =====================================================================
 function handleCreateItem(e) {
     e.preventDefault();
     const newItem = {
@@ -363,13 +368,23 @@ function handleCreateItem(e) {
         category: document.getElementById('item-category').value,
         org: currentUser.name, ownerUid: currentUser.uid, bairro: currentUser.bairro, createdAt: Date.now()
     };
-    if (currentUser.type === 'ONG') { newItem.type = 'need'; newItem.total = parseInt(document.getElementById('item-total').value); newItem.current = 0; }
-    else { newItem.type = 'donation'; newItem.condition = document.getElementById('item-condition').value; }
+    if (currentUser.type === 'ONG') { 
+        newItem.type = 'need'; 
+        newItem.total = parseInt(document.getElementById('item-total').value); 
+        newItem.current = 0; 
+    } else { 
+        newItem.type = 'donation'; 
+        newItem.condition = document.getElementById('item-condition').value; 
+    }
 
     const save = (img) => {
         newItem.image = img;
-        db.collection("items").add(newItem).then(() => { closeModal('modal-item'); alert("Publicado!"); });
+        db.collection("items").add(newItem).then(() => { 
+            closeModal('modal-item'); 
+            alert("Publicado!"); 
+        });
     };
+    
     const f = document.getElementById('item-image').files[0];
     if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
     else save(null);
@@ -406,8 +421,7 @@ function handleSaveProfile(e) {
             updateData.website = document.getElementById('prof-site').value;
         }
 
-        db.collection("users").doc(currentUser.uid).update(updateData)
-        .then(() => {
+        db.collection("users").doc(currentUser.uid).update(updateData).then(() => {
             alert("Perfil atualizado!");
             currentUser = { ...currentUser, ...updateData };
             updateAuthUI();
@@ -430,9 +444,7 @@ function handleSaveProfile(e) {
 function previewProfileImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('prof-preview').src = e.target.result;
-        }
+        reader.onload = function(e) { document.getElementById('prof-preview').src = e.target.result; }
         reader.readAsDataURL(input.files[0]);
     }
 }
@@ -446,9 +458,7 @@ function openPublicProfile(uid) {
             document.getElementById('pub-name').textContent = user.name;
             document.getElementById('pub-type').textContent = user.type === 'ONG' ? 'ONG' : 'Doador';
             document.getElementById('pub-bairro').textContent = user.bairro || 'Niterói';
-            
-            const avatar = user.photoURL || 'https://via.placeholder.com/100';
-            document.getElementById('pub-avatar').src = avatar;
+            document.getElementById('pub-avatar').src = user.photoURL || 'https://via.placeholder.com/100';
             
             if (user.type === 'ONG') {
                 document.getElementById('pub-phone-box').classList.remove('hidden');
@@ -474,6 +484,9 @@ function openPublicProfile(uid) {
     });
 }
 
+// =====================================================================
+// MENSAGENS E CAIXA DE ENTRADA
+// =====================================================================
 function openChat(itemId, ownerId, itemTitle) {
     if (!currentUser) { alert("Faça login!"); nav('login'); return; }
     if (currentUser.uid === ownerId) { alert("Este item é seu."); return; }
@@ -528,9 +541,6 @@ function loadChatUI(title) {
     });
 }
 
-// =====================================================================
-// FUNÇÕES ATUALIZADAS DO CHAT (NOTIFICAÇÕES E CAIXA DE ENTRADA)
-// =====================================================================
 function sendMessage(e) {
     e.preventDefault();
     const input = document.getElementById('msg-input');
@@ -539,12 +549,10 @@ function sendMessage(e) {
     
     const timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
-    // Salva a mensagem no histórico do chat
     db.collection("chats").doc(currentChatId).collection("messages").add({
         text, senderId: currentUser.uid, senderAvatar: currentUser.photoURL, timestamp
     });
 
-    // Atualiza o documento pai do chat para acionar as notificações
     db.collection("chats").doc(currentChatId).update({
         lastMessage: text,
         lastSenderId: currentUser.uid,
@@ -557,7 +565,6 @@ function sendMessage(e) {
 function listenToMyChats() {
     if (globalChatsListener) globalChatsListener();
 
-    // Escuta todos os chats onde o utilizador logado participa
     globalChatsListener = db.collection("chats")
         .where("participants", "array-contains", currentUser.uid)
         .orderBy("updatedAt", "desc")
@@ -573,7 +580,6 @@ function listenToMyChats() {
             snap.docChanges().forEach(change => {
                 const chatData = change.doc.data();
                 
-                // Se não fui eu que mandei a última mensagem, mostra notificação
                 if (change.type === "modified" && chatData.lastSenderId && chatData.lastSenderId !== currentUser.uid) {
                     const isChatOpen = !document.getElementById('modal-chat').classList.contains('hidden');
                     if (!(isChatOpen && currentChatId === change.doc.id)) {
@@ -582,7 +588,6 @@ function listenToMyChats() {
                 }
             });
 
-            // Monta a Caixa de Entrada
             snap.forEach(doc => {
                 const chat = doc.data();
                 let otherName = chat.interestedId === currentUser.uid ? "Dono do Item" : chat.interestedName;
@@ -624,13 +629,79 @@ function showNotification(mensagem, chatId, titulo) {
         toast.classList.add('hidden');
     };
 
-    setTimeout(() => {
-        toast.classList.add('hidden');
-    }, 5000);
+    setTimeout(() => { toast.classList.add('hidden'); }, 5000);
 }
 
 // =====================================================================
-// FUNÇÕES DE ADMINISTRAÇÃO
+// FUNÇÕES DE EDITAR E APAGAR MEUS ITENS
+// =====================================================================
+function deleteMyItem(itemId, itemTitle) {
+    if(confirm(`Tem a certeza que deseja apagar o item "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
+        db.collection("items").doc(itemId).delete().then(() => {
+            alert("Item apagado com sucesso!");
+        }).catch(err => alert("Erro ao apagar: " + err.message));
+    }
+}
+
+function openEditItemModal(itemId) {
+    const item = itemsCache.find(i => i.id === itemId);
+    if(!item) return;
+
+    document.getElementById('edit-item-id').value = item.id;
+    document.getElementById('edit-item-title').value = item.title;
+    document.getElementById('edit-item-category').value = item.category;
+
+    if (currentUser.type === 'ONG') {
+        document.getElementById('edit-condition-field').classList.add('hidden');
+        document.getElementById('edit-ong-fields').classList.remove('hidden');
+        document.getElementById('edit-item-total').value = item.total;
+    } else {
+        document.getElementById('edit-condition-field').classList.remove('hidden');
+        document.getElementById('edit-ong-fields').classList.add('hidden');
+        document.getElementById('edit-item-condition').value = item.condition;
+    }
+
+    document.getElementById('modal-edit-item').classList.remove('hidden');
+}
+
+function handleUpdateItem(e) {
+    e.preventDefault();
+    const itemId = document.getElementById('edit-item-id').value;
+    
+    const updateData = {
+        title: document.getElementById('edit-item-title').value,
+        category: document.getElementById('edit-item-category').value,
+    };
+
+    if (currentUser.type === 'ONG') {
+        updateData.total = parseInt(document.getElementById('edit-item-total').value);
+    } else {
+        updateData.condition = document.getElementById('edit-item-condition').value;
+    }
+
+    const fileInput = document.getElementById('edit-item-image');
+    
+    const saveToDb = () => {
+        db.collection("items").doc(itemId).update(updateData).then(() => {
+            closeModal('modal-edit-item');
+            alert("Item atualizado com sucesso!");
+        }).catch(err => alert("Erro ao atualizar: " + err.message));
+    };
+
+    if (fileInput.files[0]) {
+        const r = new FileReader();
+        r.onload = ev => {
+            updateData.image = ev.target.result;
+            saveToDb();
+        };
+        r.readAsDataURL(fileInput.files[0]);
+    } else {
+        saveToDb();
+    }
+}
+
+// =====================================================================
+// FUNÇÕES DE ADMINISTRAÇÃO E UTILITÁRIOS
 // =====================================================================
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -867,28 +938,18 @@ function donateToItem(id, c, t) {
 
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
-function seedInitialData() {
-    const examples = [
-        { id: 'ex1', title: 'Ração de Gato (Exemplo)', category: 'Animais', org: 'Sistema ByeBuy', bairro: 'Icaraí', type: 'donation', condition: 'Novo', image: null },
-        { id: 'ex2', title: 'Cestas Básicas (Exemplo)', category: 'Alimentos', org: 'ONG Esperança', bairro: 'Centro', type: 'need', total: 100, current: 45, image: null }
-    ];
-    itemsCache = examples;
-    renderCurrentFeed();
-}
 
+// Captura a volta do Link Mágico
 if (auth.isSignInWithEmailLink(window.location.href)) {
     let emailSalvo = window.localStorage.getItem('emailForSignIn');
-    
     if (!emailSalvo) {
         emailSalvo = window.prompt('Por favor, confirme o seu e-mail para finalizar o login:');
     }
-
     if (emailSalvo) {
         auth.signInWithEmailLink(emailSalvo, window.location.href)
             .then((result) => {
                 window.localStorage.removeItem('emailForSignIn');
                 alert(' Entrou com sucesso.');
-                
                 window.history.replaceState(null, '', window.location.pathname);
                 nav('home');
             })
