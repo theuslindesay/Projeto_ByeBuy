@@ -16,6 +16,7 @@ let currentUser = null;
 let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
+let globalChatsListener = null; // Variável para as notificações de mensagens
 let itemsCache = [];
 let baseSize = 16;
 
@@ -29,7 +30,7 @@ window.onload = function() {
                     const userData = doc.data();
 
                     if (userData.type === 'ONG' && userData.status === 'pending') {
-                        alert("Sua conta ainda está em análise pelos administradores. Aguarde a aprovação.");
+                        alert("A sua conta ainda está em análise pelos administradores. Aguarde a aprovação.");
                         auth.signOut();
                         currentUser = null;
                         updateAuthUI();
@@ -39,6 +40,7 @@ window.onload = function() {
                     currentUser = { uid: user.uid, ...userData };
                     updateAuthUI();
                     renderCurrentFeed(); 
+                    listenToMyChats(); // Começa a ouvir as mensagens recebidas
                 }
             });
         } else {
@@ -53,7 +55,7 @@ window.onload = function() {
 
 function nav(view) {
     if (view === 'admin' && !isAdmin()) {
-        alert("Acesso negado! Apenas administradores podem acessar esta área.");
+        alert("Acesso negado! Apenas administradores podem aceder a esta área.");
         return;
     }
     
@@ -80,7 +82,7 @@ function updateAuthUI() {
     if (currentUser) {
         document.getElementById('guest-nav').classList.add('hidden');
         document.getElementById('user-nav').classList.remove('hidden');
-        document.getElementById('user-greeting').innerText = `Olá, ${currentUser.name ? currentUser.name.split(' ')[0] : 'Usuário'}`;
+        document.getElementById('user-greeting').innerText = `Olá, ${currentUser.name ? currentUser.name.split(' ')[0] : 'Utilizador'}`;
         
         if(currentUser.photoURL) {
             const avatar = document.getElementById('header-avatar');
@@ -209,8 +211,6 @@ function renderCard(id, item) {
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
     const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
-    
-    // Adicionamos o atributo data-category aqui para o filtro
     const categoryAttr = item.category ? item.category.toLowerCase() : '';
 
     let cardHTML = `<article class="card" data-search="${searchText}" data-category="${categoryAttr}">`;
@@ -248,18 +248,15 @@ function registerDonationReceipt(itemId, current, total) {
         return;
     }
     
-    if (confirm("Você confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
+    if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
         db.collection("items").doc(itemId).update({
             current: current + 1
         }).then(() => {
-            alert("Recebimento registrado com sucesso!");
+            alert("Recebimento registado com sucesso!");
         }).catch(err => alert("Erro: " + err.message));
     }
 }
 
-// =====================================================================
-// FUNÇÃO DE LOGIN COM LINK MÁGICO
-// =====================================================================
 function handleLogin(e) {
     e.preventDefault();
     const emailDigitado = document.getElementById('login-email').value;
@@ -277,7 +274,7 @@ function handleLogin(e) {
     auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
         .then(() => {
             window.localStorage.setItem('emailForSignIn', emailDigitado);
-            alert('Um link de acesso foi enviado para seu email! Verifique sua caixa de entrada (e a pasta de Spam).');
+            alert('Um link de acesso foi enviado para o seu email! Verifique a sua caixa de entrada (e a pasta de Spam).');
         })
         .catch((error) => {
             console.error("Erro ao enviar o link:", error);
@@ -494,7 +491,7 @@ function openChat(itemId, ownerId, itemTitle) {
 function openChatList(itemId) {
     document.getElementById('modal-chat-list').classList.remove('hidden');
     const container = document.getElementById('chat-list-container');
-    container.innerHTML = '<p>Carregando...</p>';
+    container.innerHTML = '<p>A carregar...</p>';
     db.collection("chats").where("itemId", "==", itemId).get().then((snap) => {
         container.innerHTML = '';
         const myChats = [];
@@ -516,7 +513,7 @@ function loadChatUI(title) {
     document.getElementById('modal-chat').classList.remove('hidden');
     document.getElementById('chat-title').innerText = title;
     const container = document.getElementById('chat-messages');
-    container.innerHTML = 'Carregando...';
+    container.innerHTML = 'A carregar...';
     if (unsubscribeChat) unsubscribeChat();
     unsubscribeChat = db.collection("chats").doc(currentChatId).collection("messages").orderBy("timestamp", "asc").onSnapshot(snap => {
         container.innerHTML = '';
@@ -531,17 +528,110 @@ function loadChatUI(title) {
     });
 }
 
+// =====================================================================
+// FUNÇÕES ATUALIZADAS DO CHAT (NOTIFICAÇÕES E CAIXA DE ENTRADA)
+// =====================================================================
 function sendMessage(e) {
     e.preventDefault();
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
     if (!text) return;
+    
+    const timestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+    // Salva a mensagem no histórico do chat
     db.collection("chats").doc(currentChatId).collection("messages").add({
-        text, senderId: currentUser.uid, senderAvatar: currentUser.photoURL, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        text, senderId: currentUser.uid, senderAvatar: currentUser.photoURL, timestamp
     });
+
+    // Atualiza o documento pai do chat para acionar as notificações
+    db.collection("chats").doc(currentChatId).update({
+        lastMessage: text,
+        lastSenderId: currentUser.uid,
+        updatedAt: timestamp
+    });
+
     input.value = '';
 }
 
+function listenToMyChats() {
+    if (globalChatsListener) globalChatsListener();
+
+    // Escuta todos os chats onde o utilizador logado participa
+    globalChatsListener = db.collection("chats")
+        .where("participants", "array-contains", currentUser.uid)
+        .orderBy("updatedAt", "desc")
+        .onSnapshot(snap => {
+            const container = document.getElementById('messages-list-container');
+            if(container) container.innerHTML = '';
+
+            if (snap.empty) {
+                if(container) container.innerHTML = '<p style="text-align:center;">Ainda não tem conversas.</p>';
+                return;
+            }
+
+            snap.docChanges().forEach(change => {
+                const chatData = change.doc.data();
+                
+                // Se não fui eu que mandei a última mensagem, mostra notificação
+                if (change.type === "modified" && chatData.lastSenderId && chatData.lastSenderId !== currentUser.uid) {
+                    const isChatOpen = !document.getElementById('modal-chat').classList.contains('hidden');
+                    if (!(isChatOpen && currentChatId === change.doc.id)) {
+                        showNotification(chatData.lastMessage, change.doc.id, chatData.itemTitle);
+                    }
+                }
+            });
+
+            // Monta a Caixa de Entrada
+            snap.forEach(doc => {
+                const chat = doc.data();
+                let otherName = chat.interestedId === currentUser.uid ? "Dono do Item" : chat.interestedName;
+
+                if(container) {
+                    const div = document.createElement('div');
+                    div.className = 'admin-item'; 
+                    div.style.cursor = 'pointer';
+                    div.innerHTML = `
+                        <div class="admin-item-info">
+                            <div class="admin-item-name">${chat.itemTitle}</div>
+                            <div class="admin-item-details">Chat com: ${otherName}</div>
+                            <div style="color:#666; font-style:italic; font-size:0.85rem; margin-top:5px;">
+                                💬 ${chat.lastMessage ? chat.lastMessage : 'Nova conversa iniciada'}
+                            </div>
+                        </div>
+                        <div class="admin-item-actions">
+                            <button class="btn-submit btn-outline" style="padding: 5px 15px;">Abrir</button>
+                        </div>
+                    `;
+                    div.onclick = () => { 
+                        currentChatId = doc.id; 
+                        loadChatUI(chat.itemTitle); 
+                    };
+                    container.appendChild(div);
+                }
+            });
+        });
+}
+
+function showNotification(mensagem, chatId, titulo) {
+    const toast = document.getElementById('toast-notification');
+    document.getElementById('toast-msg').innerText = mensagem;
+    toast.classList.remove('hidden');
+
+    toast.onclick = function() {
+        currentChatId = chatId;
+        loadChatUI(titulo);
+        toast.classList.add('hidden');
+    };
+
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 5000);
+}
+
+// =====================================================================
+// FUNÇÕES DE ADMINISTRAÇÃO
+// =====================================================================
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
@@ -560,11 +650,11 @@ function showAdminTab(tab) {
 function loadAdminONGs() {
     if (!isAdmin()) { alert("Acesso negado!"); nav('home'); return; }
     const container = document.getElementById('admin-ongs-list');
-    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando...</p>';
+    container.innerHTML = '<p style="text-align:center; color:#999;">A carregar...</p>';
 
     db.collection("users").where("type", "==", "ONG").get().then((snapshot) => {
         container.innerHTML = '';
-        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhuma ONG cadastrada.</p>'; return; }
+        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhuma ONG registada.</p>'; return; }
 
         snapshot.forEach((doc) => {
             const ong = doc.data();
@@ -600,7 +690,7 @@ function loadAdminONGs() {
 
 function approveONG(uid, name) {
     if(!isAdmin()) return;
-    if(confirm(`Aprovar o cadastro da ONG ${name}?`)) {
+    if(confirm(`Aprovar o registo da ONG ${name}?`)) {
         db.collection("users").doc(uid).update({ status: 'active' }).then(() => {
             alert("ONG Aprovada com sucesso!");
             loadAdminONGs();
@@ -611,11 +701,11 @@ function approveONG(uid, name) {
 function loadAdminUsers() {
     if (!isAdmin()) { alert("Acesso negado!"); nav('home'); return; }
     const container = document.getElementById('admin-users-list');
-    container.innerHTML = '<p style="text-align:center; color:#999;">Carregando usuários...</p>';
+    container.innerHTML = '<p style="text-align:center; color:#999;">A carregar utilizadores...</p>';
 
     db.collection("users").where("type", "==", "Pessoa").get().then((snapshot) => {
         container.innerHTML = '';
-        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhum doador cadastrado.</p>'; return; }
+        if (snapshot.empty) { container.innerHTML = '<p style="text-align:center;">Nenhum doador registado.</p>'; return; }
 
         snapshot.forEach((doc) => {
             const user = doc.data();
@@ -640,11 +730,11 @@ function loadAdminUsers() {
 
 function deleteUser(userId, userName) {
     if (!isAdmin()) return;
-    if (!confirm(`Tem certeza que deseja excluir o usuário "${userName}"?\n\nEsta ação é irreversível.`)) return;
+    if (!confirm(`Tem a certeza que deseja excluir o utilizador "${userName}"?\n\nEsta ação é irreversível.`)) return;
     db.collection("users").doc(userId).delete().then(() => {
-        alert(`Usuário "${userName}" excluído!`);
+        alert(`Utilizador "${userName}" excluído!`);
         loadAdminUsers(); 
-    }).catch(err => alert("Erro ao excluir usuário."));
+    }).catch(err => alert("Erro ao excluir utilizador."));
 }
 
 function filterAdminONGs() {
@@ -723,14 +813,14 @@ function handleAdminEditONG(e) {
 
 function adminDeleteItem(itemId, itemTitle) {
     if (!isAdmin()) return alert("Acesso negado.");
-    if (confirm(`ADMIN: Tem certeza que deseja excluir o item "${itemTitle}"?`)) {
+    if (confirm(`ADMIN: Tem a certeza que deseja excluir o item "${itemTitle}"?`)) {
         db.collection("items").doc(itemId).delete().then(() => alert("Item excluído com sucesso!"));
     }
 }
 
 function deleteONG(ongId, ongName) {
     if (!isAdmin()) return;
-    if (!confirm(`Tem certeza que deseja excluir a ONG "${ongName}"?\n\nEsta ação removerá itens e chats relacionados.`)) return;
+    if (!confirm(`Tem a certeza que deseja excluir a ONG "${ongName}"?\n\nEsta ação removerá itens e chats relacionados.`)) return;
 
     db.collection("items").where("ownerUid", "==", ongId).get()
     .then((snapshot) => {
@@ -786,22 +876,18 @@ function seedInitialData() {
     renderCurrentFeed();
 }
 
-// =====================================================================
-// CAPTURAR O RETORNO DO USUÁRIO PELO LINK
-// =====================================================================
-
 if (auth.isSignInWithEmailLink(window.location.href)) {
     let emailSalvo = window.localStorage.getItem('emailForSignIn');
     
     if (!emailSalvo) {
-        emailSalvo = window.prompt('Por favor, confirme seu e-mail para finalizar o login:');
+        emailSalvo = window.prompt('Por favor, confirme o seu e-mail para finalizar o login:');
     }
 
     if (emailSalvo) {
         auth.signInWithEmailLink(emailSalvo, window.location.href)
             .then((result) => {
                 window.localStorage.removeItem('emailForSignIn');
-                alert(' Você entrou com sucesso.');
+                alert(' Entrou com sucesso.');
                 
                 window.history.replaceState(null, '', window.location.pathname);
                 nav('home');
