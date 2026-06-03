@@ -224,17 +224,26 @@ function renderCard(id, item) {
 
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
-    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
+    
+    // NOVO: Prepara o código para aparecer no visual e na pesquisa
+    const codigoDoItem = item.itemCode ? item.itemCode : 'S/C';
+    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org} ${codigoDoItem}`.toLowerCase();
     const categoryAttr = item.category ? item.category.toLowerCase() : '';
 
     let cardHTML = `<article class="card" data-search="${searchText}" data-category="${categoryAttr}">`;
     cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
     cardHTML += `<div class="card-content">`;
     
+    // NOVO: Etiqueta visual com o código
+    const codeTag = `<div style="background:#f0f0f0; padding:3px 8px; border-radius:5px; font-size:0.75rem; font-weight:bold; color:#555; display:inline-block; margin-bottom:10px;">Cód: ${codigoDoItem}</div>`;
+    
     if (item.type === 'need') {
         const pct = (item.current / item.total) * 100;
         cardHTML += `
-            <span class="tag" style="background:var(--danger-color)">Pedido de ONG</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="tag" style="background:var(--danger-color); margin-bottom:0;">Pedido de ONG</span>
+                ${codeTag}
+            </div>
             <h3>${item.title}</h3>
             <p class="ong-info"><strong>ONG:</strong> ${donorName} - ${item.bairro}</p>
             <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
@@ -244,7 +253,10 @@ function renderCard(id, item) {
         `;
     } else {
         cardHTML += `
-            <span class="tag donation">Para Doação</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="tag donation" style="margin-bottom:0;">Para Doação</span>
+                ${codeTag}
+            </div>
             <h3>${item.title}</h3>
             <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
             <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
@@ -471,8 +483,14 @@ function handleCreateItem(e) {
     const newItem = {
         title: document.getElementById('item-title').value,
         category: document.getElementById('item-category').value,
-        org: currentUser.name, ownerUid: currentUser.uid, bairro: currentUser.bairro, createdAt: Date.now()
+        org: currentUser.name, 
+        ownerUid: currentUser.uid, 
+        bairro: currentUser.bairro, 
+        createdAt: Date.now(),
+        itemCode: gerarCodigoItem() // NOVO: Salva o código único gerado
     };
+    
+    // ... restante da função continua igual ...
     if (currentUser.type === 'ONG') { 
         newItem.type = 'need'; 
         newItem.total = parseInt(document.getElementById('item-total').value); 
@@ -1037,6 +1055,10 @@ function toggleRegisterType(t) {
         optOng.classList.remove('active');
         ongFields.classList.add('hidden'); 
     }
+}
+// Função para gerar código único curto (ex: X7B9M)
+function gerarCodigoItem() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
 }
 
 function donateToItem(id, c, t) { 
