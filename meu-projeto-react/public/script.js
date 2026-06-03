@@ -17,13 +17,45 @@ let currentChatId = null;
 let unsubscribeChat = null;
 let feedListener = null; 
 let globalChatsListener = null; 
-let ongPostsListener = null; // Listener da nova Comunidade
+let ongPostsListener = null; 
 let itemsCache = [];
 let baseSize = 16;
 
+// =====================================================================
+// UTILITÁRIOS
+// =====================================================================
+function gerarCodigoItem() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function resize(val) { 
+    baseSize += val; 
+    if(baseSize<12) baseSize=12; 
+    if(baseSize>24) baseSize=24; 
+    document.body.style.fontSize = baseSize+'px'; 
+}
+
+function isAdmin() {
+    return currentUser && currentUser.type === 'Admin';
+}
+
+function setupCNPJMask() { 
+    const e = document.getElementById('reg-cnpj'); 
+    if(e) e.addEventListener('input', ev => { 
+        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
+        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
+    }); 
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
+
+// =====================================================================
+// NAVEGAÇÃO E AUTENTICAÇÃO
+// =====================================================================
 window.onload = function() {
     listenToFeed();
-    listenToOngFeed(); // Inicia o carregamento das postagens da ONG
+    listenToOngFeed(); 
 
     auth.onAuthStateChanged((user) => {
         if (user) {
@@ -69,17 +101,6 @@ function nav(view) {
     }
 }
 
-function resize(val) { 
-    baseSize += val; 
-    if(baseSize<12) baseSize=12; 
-    if(baseSize>24) baseSize=24; 
-    document.body.style.fontSize = baseSize+'px'; 
-}
-
-function isAdmin() {
-    return currentUser && currentUser.type === 'Admin';
-}
-
 function updateAuthUI() {
     if (currentUser) {
         document.getElementById('guest-nav').classList.add('hidden');
@@ -112,7 +133,6 @@ function updateAuthUI() {
                 currentUser.type === 'ONG' ? 'Solicitar Doação' : 'Desapegar (Anunciar)';
         }
 
-        // MOSTRA BOTAO DA COMUNIDADE SO PARA ONGS
         if (currentUser.type === 'ONG') {
             document.getElementById('btn-create-post').classList.remove('hidden');
         } else {
@@ -128,254 +148,6 @@ function updateAuthUI() {
     }
 }
 
-// =====================================================================
-// RENDERIZAÇÃO DO MURAL SOLIDÁRIO
-// =====================================================================
-function listenToFeed() {
-    if (feedListener) feedListener();
-
-    feedListener = db.collection("items").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-        itemsCache = [];
-        if (snapshot.empty) return; 
-        
-        snapshot.forEach((doc) => { 
-            itemsCache.push({ id: doc.id, ...doc.data() });
-        });
-        
-        renderCurrentFeed();
-    });
-}
-
-function renderCurrentFeed() {
-    const container = document.getElementById('feed-container');
-    container.innerHTML = '';
-    
-    if (itemsCache.length === 0) return;
-
-    itemsCache.forEach(item => {
-        renderCard(item.id, item);
-    });
-    
-    filterFeed();
-}
-
-function filterFeed() {
-    const term = document.getElementById('feed-search').value.toLowerCase();
-    const selectedCategory = document.getElementById('feed-category').value.toLowerCase();
-    
-    const cards = document.querySelectorAll('#feed-container .card');
-
-    cards.forEach(card => {
-        const textData = card.getAttribute('data-search') || '';
-        const categoryData = card.getAttribute('data-category') || '';
-        
-        const matchesText = textData.includes(term);
-        const matchesCategory = (selectedCategory === "") || (categoryData === selectedCategory);
-
-        if (matchesText && matchesCategory) {
-            card.style.display = 'flex';
-        } else {
-            card.style.display = 'none';
-        }
-    });
-}
-
-function renderCard(id, item) {
-    const container = document.getElementById('feed-container');
-    
-    let isOwner = currentUser && (item.ownerUid === currentUser.uid);
-    let isAdminUser = isAdmin();
-
-    const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
-    let btnHTML = '';
-    let deleteBtnHTML = '';
-    
-    if (isOwner) {
-        btnHTML = `
-            <button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>
-            ${item.type === 'need' && item.current < item.total ? 
-                `<button class="btn-submit btn-green" style="margin-top:5px;" onclick="registerDonationReceipt('${id}', ${item.current}, ${item.total})">
-                    ✅ Confirmar Recebimento (+1)
-                </button>` : ''
-            }
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
-                <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Apagar</button>
-            </div>
-        `;
-    } else {
-        if (item.type === 'need') {
-            btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
-                Tenho este item! (Combinar) 💬
-            </button>`;
-        } else {
-            btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
-        }
-
-        if (isAdminUser) {
-            deleteBtnHTML = `
-                <div style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed #eee;">
-                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px; font-size:0.8rem;" onclick="openEditItemModal('${id}')">🛠️ Admin: Editar</button>
-                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px; font-size:0.8rem;" onclick="adminDeleteItem('${id}', '${item.title}')">🗑️ Admin: Excluir</button>
-                </div>
-            `;
-        }
-    }
-
-    const donorUid = item.ownerUid || '';
-    const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
-    
-    // NOVO: Prepara o código para aparecer no visual e na pesquisa
-    const codigoDoItem = item.itemCode ? item.itemCode : 'S/C';
-    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org} ${codigoDoItem}`.toLowerCase();
-    const categoryAttr = item.category ? item.category.toLowerCase() : '';
-
-    let cardHTML = `<article class="card" data-search="${searchText}" data-category="${categoryAttr}">`;
-    cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
-    cardHTML += `<div class="card-content">`;
-    
-    // NOVO: Etiqueta visual com o código
-    const codeTag = `<div style="background:#f0f0f0; padding:3px 8px; border-radius:5px; font-size:0.75rem; font-weight:bold; color:#555; display:inline-block; margin-bottom:10px;">Cód: ${codigoDoItem}</div>`;
-    
-    if (item.type === 'need') {
-        const pct = (item.current / item.total) * 100;
-        cardHTML += `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="tag" style="background:var(--danger-color); margin-bottom:0;">Pedido de ONG</span>
-                ${codeTag}
-            </div>
-            <h3>${item.title}</h3>
-            <p class="ong-info"><strong>ONG:</strong> ${donorName} - ${item.bairro}</p>
-            <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
-            <p style="font-size: 0.8rem;">${item.current} de ${item.total} conseguidos</p>
-            ${btnHTML}
-            ${deleteBtnHTML}
-        `;
-    } else {
-        cardHTML += `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="tag donation" style="margin-bottom:0;">Para Doação</span>
-                ${codeTag}
-            </div>
-            <h3>${item.title}</h3>
-            <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
-            <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
-            ${btnHTML}
-            ${deleteBtnHTML}
-        `;
-    }
-    cardHTML += `</div></article>`;
-    container.innerHTML += cardHTML;
-}
-
-function registerDonationReceipt(itemId, current, total) {
-    if (current >= total) {
-        alert("Meta já atingida!");
-        return;
-    }
-    if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isto irá atualizar a barra de progresso no mural.")) {
-        db.collection("items").doc(itemId).update({
-            current: current + 1
-        }).then(() => {
-            alert("Recebimento registado com sucesso!");
-        }).catch(err => alert("Erro: " + err.message));
-    }
-}
-
-// =====================================================================
-// COMUNIDADE DAS ONGS (NOVO)
-// =====================================================================
-
-function listenToOngFeed() {
-    if (ongPostsListener) ongPostsListener();
-    
-    ongPostsListener = db.collection("ong_posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
-        const container = document.getElementById('ong-feed-container');
-        container.innerHTML = '';
-        
-        if (snapshot.empty) { 
-            container.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">Nenhuma postagem ainda.</p>';
-            return; 
-        }
-        
-        snapshot.forEach((doc) => { 
-            const post = { id: doc.id, ...doc.data() };
-            renderOngPost(post, container);
-        });
-    });
-}
-
-function renderOngPost(post, container) {
-    const dateObj = new Date(post.createdAt);
-    const dateStr = dateObj.toLocaleDateString() + ' às ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-    
-    let isOwner = currentUser && (post.ongId === currentUser.uid);
-    let isAdminUser = isAdmin();
-    let deleteBtn = '';
-    
-    if (isOwner || isAdminUser) {
-        deleteBtn = `<button onclick="deleteOngPost('${post.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:1.2rem;" title="Apagar Postagem">🗑️</button>`;
-    }
-
-    const imgHtml = post.image ? `<img src="${post.image}" class="ong-post-image">` : '';
-
-    const html = `
-        <div class="ong-post-card">
-            <div class="ong-post-header">
-                <img src="${post.ongAvatar}" class="ong-post-avatar" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">
-                <div style="flex:1;">
-                    <div class="ong-post-name" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">${post.ongName}</div>
-                    <div class="ong-post-date">${dateStr}</div>
-                </div>
-                ${deleteBtn}
-            </div>
-            ${imgHtml}
-            <div class="ong-post-body">${post.content}</div>
-        </div>
-    `;
-    container.innerHTML += html;
-}
-
-function handleCreateOngPost(e) {
-    e.preventDefault();
-    const content = document.getElementById('post-content').value;
-    const newPost = {
-        ongId: currentUser.uid,
-        ongName: currentUser.name,
-        ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
-        content: content,
-        createdAt: Date.now()
-    };
-
-    const save = (img) => {
-        newPost.image = img;
-        db.collection("ong_posts").add(newPost).then(() => { 
-            closeModal('modal-ong-post'); 
-            document.getElementById('post-content').value = '';
-            document.getElementById('post-image').value = '';
-            alert("Postagem publicada com sucesso!"); 
-        }).catch(err => alert("Erro: " + err.message));
-    };
-    
-    const f = document.getElementById('post-image').files[0];
-    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
-    else save(null);
-}
-
-function deleteOngPost(id) {
-    if(confirm("Deseja mesmo apagar esta postagem da Comunidade?")) {
-        db.collection("ong_posts").doc(id).delete();
-    }
-}
-
-function openOngPostModal() {
-    document.getElementById('modal-ong-post').classList.remove('hidden');
-}
-
-
-// =====================================================================
-// AUTENTICAÇÃO
-// =====================================================================
 function handleLogin(e) {
     e.preventDefault();
     const emailDigitado = document.getElementById('login-email').value;
@@ -457,26 +229,171 @@ function handleRegister(e) {
     } else createUserInDB(null);
 }
 
-function previewRegisterImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-function setupCNPJMask() { 
-    const e = document.getElementById('reg-cnpj'); 
-    if(e) e.addEventListener('input', ev => { 
-        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
-        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
-    }); 
-}
-
 function logout() { auth.signOut().then(() => location.reload()); }
 
 // =====================================================================
-// CRIAÇÃO DE ITENS E PERFIL
+// RENDERIZAÇÃO DO MURAL SOLIDÁRIO
+// =====================================================================
+function listenToFeed() {
+    if (feedListener) feedListener();
+
+    feedListener = db.collection("items").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+        itemsCache = [];
+        if (snapshot.empty) return; 
+        
+        snapshot.forEach((doc) => { 
+            itemsCache.push({ id: doc.id, ...doc.data() });
+        });
+        
+        renderCurrentFeed();
+    });
+}
+
+function renderCurrentFeed() {
+    const container = document.getElementById('feed-container');
+    container.innerHTML = '';
+    
+    if (itemsCache.length === 0) return;
+
+    itemsCache.forEach(item => {
+        renderCard(item.id, item);
+    });
+    
+    filterFeed();
+}
+
+function filterFeed() {
+    const term = document.getElementById('feed-search').value.toLowerCase();
+    const selectedCategory = document.getElementById('feed-category').value.toLowerCase();
+    
+    const cards = document.querySelectorAll('#feed-container .card');
+
+    cards.forEach(card => {
+        const textData = card.getAttribute('data-search') || '';
+        const categoryData = card.getAttribute('data-category') || '';
+        
+        const matchesText = textData.includes(term);
+        const matchesCategory = (selectedCategory === "") || (categoryData === selectedCategory);
+
+        if (matchesText && matchesCategory) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function renderCard(id, item) {
+    const container = document.getElementById('feed-container');
+    
+    let isOwner = currentUser && (item.ownerUid === currentUser.uid);
+    let isAdminUser = isAdmin();
+
+    const isCompleted = item.status === 'completed';
+    const isMetaAtingida = item.type === 'need' && item.current >= item.total;
+    const cardFinished = isCompleted || isMetaAtingida;
+
+    const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
+    let btnHTML = '';
+    let deleteBtnHTML = '';
+    
+    if (isOwner) {
+        btnHTML = `<button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>`;
+
+        if (item.type === 'need' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="registerDonationReceipt('${id}', ${item.current}, ${item.total})">
+                    ✅ Confirmar Recebimento (Lote)
+                </button>`;
+        } else if (item.type === 'donation' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="markAsDonated('${id}')">
+                    🎁 Marcar como Doado
+                </button>`;
+        }
+
+        if (!cardFinished) {
+            btnHTML += `
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Cancelar Postagem</button>
+                </div>`;
+        } else {
+            btnHTML += `<div style="text-align:center; margin-top:15px; font-weight:bold; color:var(--secondary-color);">Encerrado com Sucesso 🎉</div>`;
+        }
+    } else {
+        if (!cardFinished) {
+            if (item.type === 'need') {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
+                    Tenho este item! (Combinar) 💬
+                </button>`;
+            } else {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
+            }
+        }
+
+        if (isAdminUser) {
+            deleteBtnHTML = `
+                <div style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed #eee;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px; font-size:0.8rem;" onclick="openEditItemModal('${id}')">🛠️ Admin: Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px; font-size:0.8rem;" onclick="adminDeleteItem('${id}', '${item.title}')">🗑️ Admin: Excluir</button>
+                </div>
+            `;
+        }
+    }
+
+    const donorUid = item.ownerUid || '';
+    const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
+    const codigoDoItem = item.itemCode ? item.itemCode : 'S/C';
+    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org} ${codigoDoItem}`.toLowerCase();
+    const categoryAttr = item.category ? item.category.toLowerCase() : '';
+
+    let cardHTML = `<article class="card ${cardFinished ? 'completed' : ''}" data-search="${searchText}" data-category="${categoryAttr}">`;
+    cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
+    cardHTML += `<div class="card-content">`;
+    
+    const codeTag = `<div style="background:#f0f0f0; padding:3px 8px; border-radius:5px; font-size:0.75rem; font-weight:bold; color:#555; display:inline-block; margin-bottom:10px;">Cód: ${codigoDoItem}</div>`;
+    
+    if (item.type === 'need') {
+        const pct = (item.current / item.total) * 100;
+        const tagClass = cardFinished ? 'tag completed' : 'tag';
+        const tagColor = cardFinished ? 'var(--secondary-color)' : 'var(--danger-color)';
+        const tagText = cardFinished ? 'Meta Atingida 🎉' : 'Pedido de ONG';
+
+        cardHTML += `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="background:${tagColor}; margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
+            <h3>${item.title}</h3>
+            <p class="ong-info"><strong>ONG:</strong> ${donorName} - ${item.bairro}</p>
+            <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
+            <p style="font-size: 0.8rem;">${item.current} de ${item.total} conseguidos</p>
+            ${btnHTML}
+            ${deleteBtnHTML}
+        `;
+    } else {
+        const tagClass = cardFinished ? 'tag completed' : 'tag donation';
+        const tagText = cardFinished ? 'Doado 🎁' : 'Para Doação';
+
+        cardHTML += `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
+            <h3>${item.title}</h3>
+            <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
+            <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
+            ${btnHTML}
+            ${deleteBtnHTML}
+        `;
+    }
+    cardHTML += `</div></article>`;
+    container.innerHTML += cardHTML;
+}
+
+// =====================================================================
+// CRIAÇÃO, EDIÇÃO E EXCLUSÃO DE ITENS (MURAL)
 // =====================================================================
 function handleCreateItem(e) {
     e.preventDefault();
@@ -487,10 +404,10 @@ function handleCreateItem(e) {
         ownerUid: currentUser.uid, 
         bairro: currentUser.bairro, 
         createdAt: Date.now(),
-        itemCode: gerarCodigoItem() // NOVO: Salva o código único gerado
+        itemCode: gerarCodigoItem(),
+        status: 'active'
     };
     
-    // ... restante da função continua igual ...
     if (currentUser.type === 'ONG') { 
         newItem.type = 'need'; 
         newItem.total = parseInt(document.getElementById('item-total').value); 
@@ -513,6 +430,212 @@ function handleCreateItem(e) {
     else save(null);
 }
 
+function handleUpdateItem(e) {
+    e.preventDefault();
+    const itemId = document.getElementById('edit-item-id').value;
+    
+    const itemOriginal = itemsCache.find(i => i.id === itemId);
+    if(!itemOriginal) return;
+
+    const updateData = {
+        title: document.getElementById('edit-item-title').value,
+        category: document.getElementById('edit-item-category').value,
+    };
+
+    if (itemOriginal.type === 'need') {
+        updateData.total = parseInt(document.getElementById('edit-item-total').value);
+    } else {
+        updateData.condition = document.getElementById('edit-item-condition').value;
+    }
+
+    const fileInput = document.getElementById('edit-item-image');
+    
+    const saveToDb = () => {
+        db.collection("items").doc(itemId).update(updateData).then(() => {
+            closeModal('modal-edit-item');
+            alert("Item atualizado com sucesso!");
+        }).catch(err => alert("Erro ao atualizar: " + err.message));
+    };
+
+    if (fileInput.files[0]) {
+        const r = new FileReader();
+        r.onload = ev => {
+            updateData.image = ev.target.result;
+            saveToDb();
+        };
+        r.readAsDataURL(fileInput.files[0]);
+    } else {
+        saveToDb();
+    }
+}
+
+function openEditItemModal(itemId) {
+    const item = itemsCache.find(i => i.id === itemId);
+    if(!item) return;
+
+    document.getElementById('edit-item-id').value = item.id;
+    document.getElementById('edit-item-title').value = item.title;
+    document.getElementById('edit-item-category').value = item.category;
+
+    if (item.type === 'need') {
+        document.getElementById('edit-condition-field').classList.add('hidden');
+        document.getElementById('edit-ong-fields').classList.remove('hidden');
+        document.getElementById('edit-item-total').value = item.total;
+    } else {
+        document.getElementById('edit-condition-field').classList.remove('hidden');
+        document.getElementById('edit-ong-fields').classList.add('hidden');
+        document.getElementById('edit-item-condition').value = item.condition;
+    }
+
+    document.getElementById('modal-edit-item').classList.remove('hidden');
+}
+
+function deleteMyItem(itemId, itemTitle) {
+    if(confirm(`Tem a certeza que deseja cancelar a postagem de "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
+        db.collection("items").doc(itemId).delete().then(() => {
+            alert("Item apagado com sucesso!");
+        }).catch(err => alert("Erro ao apagar: " + err.message));
+    }
+}
+
+function registerDonationReceipt(itemId, current, total) {
+    if (current >= total) {
+        alert("Meta já atingida!");
+        return;
+    }
+
+    const maxReceivable = total - current;
+    const input = prompt(`Quantas unidades você recebeu agora? (Máximo: ${maxReceivable})`, "1");
+
+    if (input === null) return; 
+
+    const amount = parseInt(input, 10);
+
+    if (isNaN(amount) || amount <= 0) {
+        alert("Por favor, insira um número válido e maior que zero.");
+        return;
+    }
+
+    if (amount > maxReceivable) {
+        alert(`Você só pode receber mais ${maxReceivable} unidades para atingir a meta.`);
+        return;
+    }
+
+    db.collection("items").doc(itemId).update({
+        current: current + amount
+    }).then(() => {
+        alert(`Recebimento de ${amount} unidade(s) registrado com sucesso!`);
+    }).catch(err => alert("Erro: " + err.message));
+}
+
+function markAsDonated(itemId) {
+    if (confirm("Confirmar que este item foi doado com sucesso? Ele ficará marcado como concluído no mural, servindo de inspiração para outros!")) {
+        db.collection("items").doc(itemId).update({
+            status: 'completed'
+        }).then(() => {
+            alert("Que maravilha! Doação registrada no nosso histórico.");
+        }).catch(err => alert("Erro: " + err.message));
+    }
+}
+
+function donateToItem(id, c, t) { 
+    if(!currentUser) return nav('login'); 
+    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
+}
+
+// =====================================================================
+// COMUNIDADE DAS ONGS
+// =====================================================================
+function listenToOngFeed() {
+    if (ongPostsListener) ongPostsListener();
+    
+    ongPostsListener = db.collection("ong_posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+        const container = document.getElementById('ong-feed-container');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        if (snapshot.empty) { 
+            container.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">Nenhuma postagem ainda.</p>';
+            return; 
+        }
+        
+        snapshot.forEach((doc) => { 
+            const post = { id: doc.id, ...doc.data() };
+            renderOngPost(post, container);
+        });
+    });
+}
+
+function renderOngPost(post, container) {
+    const dateObj = new Date(post.createdAt);
+    const dateStr = dateObj.toLocaleDateString() + ' às ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let isOwner = currentUser && (post.ongId === currentUser.uid);
+    let isAdminUser = isAdmin();
+    let deleteBtn = '';
+    
+    if (isOwner || isAdminUser) {
+        deleteBtn = `<button onclick="deleteOngPost('${post.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:1.2rem;" title="Apagar Postagem">🗑️</button>`;
+    }
+
+    const imgHtml = post.image ? `<img src="${post.image}" class="ong-post-image">` : '';
+
+    const html = `
+        <div class="ong-post-card">
+            <div class="ong-post-header">
+                <img src="${post.ongAvatar}" class="ong-post-avatar" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">
+                <div style="flex:1;">
+                    <div class="ong-post-name" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">${post.ongName}</div>
+                    <div class="ong-post-date">${dateStr}</div>
+                </div>
+                ${deleteBtn}
+            </div>
+            ${imgHtml}
+            <div class="ong-post-body">${post.content}</div>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+function handleCreateOngPost(e) {
+    e.preventDefault();
+    const content = document.getElementById('post-content').value;
+    const newPost = {
+        ongId: currentUser.uid,
+        ongName: currentUser.name,
+        ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
+        content: content,
+        createdAt: Date.now()
+    };
+
+    const save = (img) => {
+        newPost.image = img;
+        db.collection("ong_posts").add(newPost).then(() => { 
+            closeModal('modal-ong-post'); 
+            document.getElementById('post-content').value = '';
+            document.getElementById('post-image').value = '';
+            alert("Postagem publicada com sucesso!"); 
+        }).catch(err => alert("Erro: " + err.message));
+    };
+    
+    const f = document.getElementById('post-image').files[0];
+    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
+    else save(null);
+}
+
+function deleteOngPost(id) {
+    if(confirm("Deseja mesmo apagar esta postagem da Comunidade?")) {
+        db.collection("ong_posts").doc(id).delete();
+    }
+}
+
+function openOngPostModal() {
+    document.getElementById('modal-ong-post').classList.remove('hidden');
+}
+
+// =====================================================================
+// PERFIL DO USUÁRIO
+// =====================================================================
 function openProfileModal() {
     if (!currentUser) return;
     document.getElementById('modal-profile').classList.remove('hidden');
@@ -568,6 +691,14 @@ function previewProfileImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(e) { document.getElementById('prof-preview').src = e.target.result; }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function previewRegisterImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
         reader.readAsDataURL(input.files[0]);
     }
 }
@@ -755,80 +886,29 @@ function showNotification(mensagem, chatId, titulo) {
     setTimeout(() => { toast.classList.add('hidden'); }, 5000);
 }
 
-// =====================================================================
-// FUNÇÕES DE EDITAR E APAGAR ITENS DO MURAL
-// =====================================================================
-function deleteMyItem(itemId, itemTitle) {
-    if(confirm(`Tem a certeza que deseja apagar o item "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
-        db.collection("items").doc(itemId).delete().then(() => {
-            alert("Item apagado com sucesso!");
-        }).catch(err => alert("Erro ao apagar: " + err.message));
-    }
-}
-
-function openEditItemModal(itemId) {
-    const item = itemsCache.find(i => i.id === itemId);
-    if(!item) return;
-
-    document.getElementById('edit-item-id').value = item.id;
-    document.getElementById('edit-item-title').value = item.title;
-    document.getElementById('edit-item-category').value = item.category;
-
-    if (item.type === 'need') {
-        document.getElementById('edit-condition-field').classList.add('hidden');
-        document.getElementById('edit-ong-fields').classList.remove('hidden');
-        document.getElementById('edit-item-total').value = item.total;
-    } else {
-        document.getElementById('edit-condition-field').classList.remove('hidden');
-        document.getElementById('edit-ong-fields').classList.add('hidden');
-        document.getElementById('edit-item-condition').value = item.condition;
-    }
-
-    document.getElementById('modal-edit-item').classList.remove('hidden');
-}
-
-function handleUpdateItem(e) {
-    e.preventDefault();
-    const itemId = document.getElementById('edit-item-id').value;
-    
-    const itemOriginal = itemsCache.find(i => i.id === itemId);
-    if(!itemOriginal) return;
-
-    const updateData = {
-        title: document.getElementById('edit-item-title').value,
-        category: document.getElementById('edit-item-category').value,
-    };
-
-    if (itemOriginal.type === 'need') {
-        updateData.total = parseInt(document.getElementById('edit-item-total').value);
-    } else {
-        updateData.condition = document.getElementById('edit-item-condition').value;
-    }
-
-    const fileInput = document.getElementById('edit-item-image');
-    
-    const saveToDb = () => {
-        db.collection("items").doc(itemId).update(updateData).then(() => {
-            closeModal('modal-edit-item');
-            alert("Item atualizado com sucesso!");
-        }).catch(err => alert("Erro ao atualizar: " + err.message));
-    };
-
-    if (fileInput.files[0]) {
-        const r = new FileReader();
-        r.onload = ev => {
-            updateData.image = ev.target.result;
-            saveToDb();
-        };
-        r.readAsDataURL(fileInput.files[0]);
-    } else {
-        saveToDb();
-    }
-}
 
 // =====================================================================
 // FUNÇÕES DE ADMINISTRAÇÃO E UTILITÁRIOS
 // =====================================================================
+function toggleRegisterType(t) {
+    const toggle = document.getElementById('register-toggle');
+    const optPessoa = document.getElementById('opt-pessoa');
+    const optOng = document.getElementById('opt-ong');
+    const ongFields = document.getElementById('ong-reg-fields');
+    
+    if (t === 'ong') {
+        toggle.classList.add('toggle-right');
+        optOng.classList.add('active');
+        optPessoa.classList.remove('active');
+        ongFields.classList.remove('hidden'); 
+    } else {
+        toggle.classList.remove('toggle-right');
+        optPessoa.classList.add('active');
+        optOng.classList.remove('active');
+        ongFields.classList.add('hidden'); 
+    }
+}
+
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
@@ -1037,37 +1117,6 @@ function deleteONG(ongId, ongName) {
         loadAdminONGs();
     });
 }
-
-function toggleRegisterType(t) {
-    const toggle = document.getElementById('register-toggle');
-    const optPessoa = document.getElementById('opt-pessoa');
-    const optOng = document.getElementById('opt-ong');
-    const ongFields = document.getElementById('ong-reg-fields');
-    
-    if (t === 'ong') {
-        toggle.classList.add('toggle-right');
-        optOng.classList.add('active');
-        optPessoa.classList.remove('active');
-        ongFields.classList.remove('hidden'); 
-    } else {
-        toggle.classList.remove('toggle-right');
-        optPessoa.classList.add('active');
-        optOng.classList.remove('active');
-        ongFields.classList.add('hidden'); 
-    }
-}
-// Função para gerar código único curto (ex: X7B9M)
-function gerarCodigoItem() {
-    return Math.random().toString(36).substring(2, 7).toUpperCase();
-}
-
-function donateToItem(id, c, t) { 
-    if(!currentUser) return nav('login'); 
-    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
-}
-
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
 
 // Captura a volta do Link Mágico
 if (auth.isSignInWithEmailLink(window.location.href)) {
