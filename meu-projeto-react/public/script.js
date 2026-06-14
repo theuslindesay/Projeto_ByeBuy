@@ -7,7 +7,7 @@ const firebaseConfig = {
     appId: "1:936406311906:web:e7b579ab1514536d7c4fbb",
     measurementId: "G-4CD5Z7VYZ1"
 };
-
+  
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -15,18 +15,52 @@ const db = firebase.firestore();
 let currentUser = null;
 let currentChatId = null;
 let unsubscribeChat = null;
-let feedListener = null;
-let globalChatsListener = null;
+let feedListener = null; 
+let globalChatsListener = null; 
+let ongPostsListener = null; 
 let itemsCache = [];
 let baseSize = 16;
 
+// =====================================================================
+// UTILITÁRIOS
+// =====================================================================
+function gerarCodigoItem() {
+    return Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+function resize(val) { 
+    baseSize += val; 
+    if(baseSize<12) baseSize=12; 
+    if(baseSize>24) baseSize=24; 
+    document.body.style.fontSize = baseSize+'px'; 
+}
+
+function isAdmin() {
+    return currentUser && currentUser.type === 'Admin';
+}
+
+function setupCNPJMask() { 
+    const e = document.getElementById('reg-cnpj'); 
+    if(e) e.addEventListener('input', ev => { 
+        let x=ev.target.value.replace(/\D/g,'').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/); 
+        ev.target.value=!x[2]?x[1]:x[1]+'.'+x[2]+'.'+x[3]+'/'+x[4]+(x[5]?'-'+x[5]:''); 
+    }); 
+}
+
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
+
+// =====================================================================
+// NAVEGAÇÃO E AUTENTICAÇÃO
+// =====================================================================
 window.onload = function() {
     listenToFeed();
+    listenToOngFeed(); 
 
     auth.onAuthStateChanged((user) => {
         if (user) {
             db.collection("users").doc(user.uid).get().then((doc) => {
-                if (doc.exists) {
+                if(doc.exists) {
                     const userData = doc.data();
 
                     if (userData.type === 'ONG' && userData.status === 'pending') {
@@ -39,8 +73,8 @@ window.onload = function() {
 
                     currentUser = { uid: user.uid, ...userData };
                     updateAuthUI();
-                    renderCurrentFeed();
-                    listenToMyChats();
+                    renderCurrentFeed(); 
+                    listenToMyChats(); 
                 }
             });
         } else {
@@ -58,24 +92,13 @@ function nav(view) {
         alert("Acesso negado! Apenas administradores podem aceder a esta área.");
         return;
     }
-
-    document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active'));
-    document.getElementById('view-' + view).classList.add('active');
-
+    
+    document.querySelectorAll('.view-section').forEach(e => e.classList.remove('active')); 
+    document.getElementById('view-'+view).classList.add('active');
+    
     if (view === 'admin') {
         showAdminTab('ongs');
     }
-}
-
-function resize(val) {
-    baseSize += val;
-    if (baseSize < 12) baseSize = 12;
-    if (baseSize > 24) baseSize = 24;
-    document.body.style.fontSize = baseSize + 'px';
-}
-
-function isAdmin() {
-    return currentUser && currentUser.type === 'Admin';
 }
 
 function updateAuthUI() {
@@ -83,8 +106,8 @@ function updateAuthUI() {
         document.getElementById('guest-nav').classList.add('hidden');
         document.getElementById('user-nav').classList.remove('hidden');
         document.getElementById('user-greeting').innerText = `Olá, ${currentUser.name ? currentUser.name.split(' ')[0] : 'Utilizador'}`;
-
-        if (currentUser.photoURL) {
+        
+        if(currentUser.photoURL) {
             const avatar = document.getElementById('header-avatar');
             avatar.src = currentUser.photoURL;
             avatar.style.display = 'block';
@@ -92,7 +115,7 @@ function updateAuthUI() {
 
         const userNav = document.getElementById('user-nav');
         let adminBtn = document.getElementById('btn-admin-panel');
-
+        
         if (isAdmin()) {
             if (!adminBtn) {
                 adminBtn = document.createElement('button');
@@ -106,31 +129,122 @@ function updateAuthUI() {
         } else {
             if (adminBtn) adminBtn.remove();
             document.getElementById('btn-hero-action').classList.remove('hidden');
-            document.getElementById('btn-hero-action').textContent =
-                currentUser.type === 'ONG' ? 'Solicitar Doação' : '+ Novo Item';
+            document.getElementById('btn-hero-action').textContent = 
+                currentUser.type === 'ONG' ? 'Solicitar Doação' : 'Desapegar (Anunciar)';
         }
+
+        if (currentUser.type === 'ONG') {
+            document.getElementById('btn-create-post').classList.remove('hidden');
+        } else {
+            document.getElementById('btn-create-post').classList.add('hidden');
+        }
+
     } else {
         document.getElementById('guest-nav').classList.remove('hidden');
         document.getElementById('user-nav').classList.add('hidden');
         document.getElementById('btn-hero-action').classList.add('hidden');
         document.getElementById('header-avatar').style.display = 'none';
+        document.getElementById('btn-create-post').classList.add('hidden');
     }
 }
 
+function handleLogin(e) {
+    e.preventDefault();
+    const emailDigitado = document.getElementById('login-email').value;
+
+    if (!emailDigitado) {
+        alert("Por favor, digite um e-mail válido!");
+        return;
+    }
+
+    const actionCodeSettings = {
+        url: 'https://projeto-bye-buy.vercel.app', 
+        handleCodeInApp: true,
+    };
+
+    auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
+        .then(() => {
+            window.localStorage.setItem('emailForSignIn', emailDigitado);
+            alert('Um link de acesso foi enviado para o seu email! Verifique a sua caixa de entrada (e a pasta de Spam).');
+        })
+        .catch((error) => {
+            console.error("Erro ao enviar o link:", error);
+            alert("Erro ao enviar o e-mail: " + error.message);
+        });
+}
+
+function handleRegister(e) {
+    e.preventDefault();
+    const email = document.getElementById('reg-email').value;
+    const pass = document.getElementById('reg-pass').value;
+    const name = document.getElementById('reg-name').value;
+    const isOng = document.getElementById('opt-ong').classList.contains('active');
+    const cnpj = document.getElementById('reg-cnpj').value;
+    
+    const phone = document.getElementById('reg-phone') ? document.getElementById('reg-phone').value : '';
+    const site = document.getElementById('reg-site') ? document.getElementById('reg-site').value : '';
+    const desc = document.getElementById('reg-desc') ? document.getElementById('reg-desc').value : '';
+    
+    const fileInput = document.getElementById('reg-image');
+
+    if (isOng && cnpj.length < 14) { 
+        alert("CNPJ inválido."); return; 
+    }
+
+    const createUserInDB = (photoDataUrl) => {
+        auth.createUserWithEmailAndPassword(email, pass).then((cred) => {
+            const data = { 
+                name, email, bairro: document.getElementById('reg-bairro').value, 
+                type: isOng ? 'ONG' : 'Pessoa',
+                photoURL: photoDataUrl || 'https://via.placeholder.com/100',
+                status: isOng ? 'pending' : 'active' 
+            };
+            
+            if (isOng) { 
+                data.cnpj = cnpj; 
+                data.ongType = document.getElementById('reg-type-ong').value;
+                if(phone) data.phone = phone;
+                if(site) data.website = site;
+                if(desc) data.description = desc;
+            }
+            
+            return db.collection("users").doc(cred.user.uid).set(data);
+        }).then(() => { 
+            auth.signOut(); 
+
+            if(isOng) {
+                document.getElementById('success-ong-name').innerText = name;
+                document.getElementById('modal-cadastro-sucesso').classList.remove('hidden');
+            } else {
+                alert("Conta criada com sucesso!");
+                nav('login'); 
+            }
+        }).catch(e => alert(e.message));
+    };
+
+    if (fileInput.files[0]) {
+        const r = new FileReader();
+        r.onload = (ev) => createUserInDB(ev.target.result);
+        r.readAsDataURL(fileInput.files[0]);
+    } else createUserInDB(null);
+}
+
+function logout() { auth.signOut().then(() => location.reload()); }
+
+// =====================================================================
+// RENDERIZAÇÃO DO MURAL SOLIDÁRIO
+// =====================================================================
 function listenToFeed() {
     if (feedListener) feedListener();
 
     feedListener = db.collection("items").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
         itemsCache = [];
-        if (snapshot.empty) {
-            renderCurrentFeed();
-            return;
-        }
-
-        snapshot.forEach((doc) => {
+        if (snapshot.empty) return; 
+        
+        snapshot.forEach((doc) => { 
             itemsCache.push({ id: doc.id, ...doc.data() });
         });
-
+        
         renderCurrentFeed();
     });
 }
@@ -138,29 +252,26 @@ function listenToFeed() {
 function renderCurrentFeed() {
     const container = document.getElementById('feed-container');
     container.innerHTML = '';
-
-    if (itemsCache.length === 0) {
-        container.innerHTML = `<p class="empty-state">Nenhum item publicado no momento.</p>`;
-        return;
-    }
+    
+    if (itemsCache.length === 0) return;
 
     itemsCache.forEach(item => {
         renderCard(item.id, item);
     });
-
+    
     filterFeed();
 }
 
 function filterFeed() {
     const term = document.getElementById('feed-search').value.toLowerCase();
     const selectedCategory = document.getElementById('feed-category').value.toLowerCase();
-
+    
     const cards = document.querySelectorAll('#feed-container .card');
 
     cards.forEach(card => {
         const textData = card.getAttribute('data-search') || '';
         const categoryData = card.getAttribute('data-category') || '';
-
+        
         const matchesText = textData.includes(term);
         const matchesCategory = (selectedCategory === "") || (categoryData === selectedCategory);
 
@@ -174,67 +285,102 @@ function filterFeed() {
 
 function renderCard(id, item) {
     const container = document.getElementById('feed-container');
-
+    
     let isOwner = currentUser && (item.ownerUid === currentUser.uid);
     let isAdminUser = isAdmin();
 
+    const isCompleted = item.status === 'completed';
+    const isMetaAtingida = item.type === 'need' && item.current >= item.total;
+    const cardFinished = isCompleted || isMetaAtingida;
+
     const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
     let btnHTML = '';
-
-    if (isOwner) {
-        btnHTML = `
-            <button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
-                <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Apagar</button>
-            </div>
-        `;
-    } else {
-        if (item.type === 'need') {
-            btnHTML = `
-                <p class="item-help-text">
-                    Se você tiver este item disponível, clique abaixo para falar com a ONG e combinar a entrega.
-                </p>
-                <button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
-                    Tenho este item 💬
-                </button>
-            `;
-        } else {
-            btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
-        }
-    }
-
     let deleteBtnHTML = '';
-    if (isAdminUser) {
-        deleteBtnHTML = `
-            <button onclick="adminDeleteItem('${id}', '${item.title}')"
-                    style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; margin-top:10px; font-size:0.8rem; width:100%;">
-                🗑️ Admin: Excluir Item
-            </button>
-        `;
+    
+    if (isOwner) {
+        btnHTML = `<button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>`;
+
+        if (item.type === 'need' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="registerDonationReceipt('${id}', ${item.current}, ${item.total})">
+                    ✅ Confirmar Recebimento (Lote)
+                </button>`;
+        } else if (item.type === 'donation' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="markAsDonated('${id}')">
+                    🎁 Marcar como Doado
+                </button>`;
+        }
+
+        if (!cardFinished) {
+            btnHTML += `
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Cancelar Postagem</button>
+                </div>`;
+        } else {
+            btnHTML += `<div style="text-align:center; margin-top:15px; font-weight:bold; color:var(--secondary-color);">Encerrado com Sucesso 🎉</div>`;
+        }
+    } else {
+        if (!cardFinished) {
+            if (item.type === 'need') {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
+                    Tenho este item! (Combinar) 💬
+                </button>`;
+            } else {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
+            }
+        }
+
+        if (isAdminUser) {
+            deleteBtnHTML = `
+                <div style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed #eee;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px; font-size:0.8rem;" onclick="openEditItemModal('${id}')">🛠️ Admin: Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px; font-size:0.8rem;" onclick="adminDeleteItem('${id}', '${item.title}')">🗑️ Admin: Excluir</button>
+                </div>
+            `;
+        }
     }
 
     const donorUid = item.ownerUid || '';
     const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
-    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org}`.toLowerCase();
+    const codigoDoItem = item.itemCode ? item.itemCode : 'S/C';
+    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org} ${codigoDoItem}`.toLowerCase();
     const categoryAttr = item.category ? item.category.toLowerCase() : '';
 
-    let cardHTML = `<article class="card" data-search="${searchText}" data-category="${categoryAttr}">`;
+    let cardHTML = `<article class="card ${cardFinished ? 'completed' : ''}" data-search="${searchText}" data-category="${categoryAttr}">`;
     cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
     cardHTML += `<div class="card-content">`;
-
+    
+    const codeTag = `<div style="background:#f0f0f0; padding:3px 8px; border-radius:5px; font-size:0.75rem; font-weight:bold; color:#555; display:inline-block; margin-bottom:10px;">Cód: ${codigoDoItem}</div>`;
+    
     if (item.type === 'need') {
+        const pct = (item.current / item.total) * 100;
+        const tagClass = cardFinished ? 'tag completed' : 'tag';
+        const tagColor = cardFinished ? 'var(--secondary-color)' : 'var(--danger-color)';
+        const tagText = cardFinished ? 'Meta Atingida 🎉' : 'Pedido de ONG';
+
         cardHTML += `
-            <span class="tag" style="background:var(--danger-color)">Pedido de ONG</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="background:${tagColor}; margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
             <h3>${item.title}</h3>
             <p class="ong-info"><strong>ONG:</strong> ${donorName} - ${item.bairro}</p>
-            <p class="item-status-badge">Aguardando contatos de doadores</p>
+            <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
+            <p style="font-size: 0.8rem;">${item.current} de ${item.total} conseguidos</p>
             ${btnHTML}
             ${deleteBtnHTML}
         `;
     } else {
+        const tagClass = cardFinished ? 'tag completed' : 'tag donation';
+        const tagText = cardFinished ? 'Doado 🎁' : 'Para Doação';
+
         cardHTML += `
-            <span class="tag donation">Para Doação</span>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
             <h3>${item.title}</h3>
             <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
             <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
@@ -242,9 +388,114 @@ function renderCard(id, item) {
             ${deleteBtnHTML}
         `;
     }
-
     cardHTML += `</div></article>`;
     container.innerHTML += cardHTML;
+}
+
+// =====================================================================
+// CRIAÇÃO, EDIÇÃO E EXCLUSÃO DE ITENS (MURAL)
+// =====================================================================
+function handleCreateItem(e) {
+    e.preventDefault();
+    const newItem = {
+        title: document.getElementById('item-title').value,
+        category: document.getElementById('item-category').value,
+        org: currentUser.name, 
+        ownerUid: currentUser.uid, 
+        bairro: currentUser.bairro, 
+        createdAt: Date.now(),
+        itemCode: gerarCodigoItem(),
+        status: 'active'
+    };
+    
+    if (currentUser.type === 'ONG') { 
+        newItem.type = 'need'; 
+        newItem.total = parseInt(document.getElementById('item-total').value); 
+        newItem.current = 0; 
+    } else { 
+        newItem.type = 'donation'; 
+        newItem.condition = document.getElementById('item-condition').value; 
+    }
+
+    const save = (img) => {
+        newItem.image = img;
+        db.collection("items").add(newItem).then(() => { 
+            closeModal('modal-item'); 
+            alert("Publicado!"); 
+        });
+    };
+    
+    const f = document.getElementById('item-image').files[0];
+    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
+    else save(null);
+}
+
+function handleUpdateItem(e) {
+    e.preventDefault();
+    const itemId = document.getElementById('edit-item-id').value;
+    
+    const itemOriginal = itemsCache.find(i => i.id === itemId);
+    if(!itemOriginal) return;
+
+    const updateData = {
+        title: document.getElementById('edit-item-title').value,
+        category: document.getElementById('edit-item-category').value,
+    };
+
+    if (itemOriginal.type === 'need') {
+        updateData.total = parseInt(document.getElementById('edit-item-total').value);
+    } else {
+        updateData.condition = document.getElementById('edit-item-condition').value;
+    }
+
+    const fileInput = document.getElementById('edit-item-image');
+    
+    const saveToDb = () => {
+        db.collection("items").doc(itemId).update(updateData).then(() => {
+            closeModal('modal-edit-item');
+            alert("Item atualizado com sucesso!");
+        }).catch(err => alert("Erro ao atualizar: " + err.message));
+    };
+
+    if (fileInput.files[0]) {
+        const r = new FileReader();
+        r.onload = ev => {
+            updateData.image = ev.target.result;
+            saveToDb();
+        };
+        r.readAsDataURL(fileInput.files[0]);
+    } else {
+        saveToDb();
+    }
+}
+
+function openEditItemModal(itemId) {
+    const item = itemsCache.find(i => i.id === itemId);
+    if(!item) return;
+
+    document.getElementById('edit-item-id').value = item.id;
+    document.getElementById('edit-item-title').value = item.title;
+    document.getElementById('edit-item-category').value = item.category;
+
+    if (item.type === 'need') {
+        document.getElementById('edit-condition-field').classList.add('hidden');
+        document.getElementById('edit-ong-fields').classList.remove('hidden');
+        document.getElementById('edit-item-total').value = item.total;
+    } else {
+        document.getElementById('edit-condition-field').classList.remove('hidden');
+        document.getElementById('edit-ong-fields').classList.add('hidden');
+        document.getElementById('edit-item-condition').value = item.condition;
+    }
+
+    document.getElementById('modal-edit-item').classList.remove('hidden');
+}
+
+function deleteMyItem(itemId, itemTitle) {
+    if(confirm(`Tem a certeza que deseja cancelar a postagem de "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
+        db.collection("items").doc(itemId).delete().then(() => {
+            alert("Item apagado com sucesso!");
+        }).catch(err => alert("Erro ao apagar: " + err.message));
+    }
 }
 
 function registerDonationReceipt(itemId, current, total) {
@@ -252,183 +503,139 @@ function registerDonationReceipt(itemId, current, total) {
         alert("Meta já atingida!");
         return;
     }
-    if (confirm("Confirma que RECEBEU fisicamente uma unidade deste item? Isso atualizará a barra de progresso no mural.")) {
+
+    const maxReceivable = total - current;
+    const input = prompt(`Quantas unidades você recebeu agora? (Máximo: ${maxReceivable})`, "1");
+
+    if (input === null) return; 
+
+    const amount = parseInt(input, 10);
+
+    if (isNaN(amount) || amount <= 0) {
+        alert("Por favor, insira um número válido e maior que zero.");
+        return;
+    }
+
+    if (amount > maxReceivable) {
+        alert(`Você só pode receber mais ${maxReceivable} unidades para atingir a meta.`);
+        return;
+    }
+
+    db.collection("items").doc(itemId).update({
+        current: current + amount
+    }).then(() => {
+        alert(`Recebimento de ${amount} unidade(s) registrado com sucesso!`);
+    }).catch(err => alert("Erro: " + err.message));
+}
+
+function markAsDonated(itemId) {
+    if (confirm("Confirmar que este item foi doado com sucesso? Ele ficará marcado como concluído no mural, servindo de inspiração para outros!")) {
         db.collection("items").doc(itemId).update({
-            current: current + 1
+            status: 'completed'
         }).then(() => {
-            alert("Recebimento registado com sucesso!");
+            alert("Que maravilha! Doação registrada no nosso histórico.");
         }).catch(err => alert("Erro: " + err.message));
     }
 }
 
-// AUTENTICAÇÃO
-function handleLogin(e) {
-    e.preventDefault();
-    const emailDigitado = document.getElementById('login-email').value.trim();
+function donateToItem(id, c, t) { 
+    if(!currentUser) return nav('login'); 
+    if(c<t) db.collection("items").doc(id).update({current:c+1}).then(()=>alert("Obrigado!")); 
+}
 
-    if (!emailDigitado) {
-        alert("Por favor, digite um e-mail válido.");
-        return;
-    }
-
-    const actionCodeSettings = {
-        url: 'https://projeto-bye-buy.vercel.app',
-        handleCodeInApp: true,
-    };
-
-    auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
-        .then(() => {
-            window.localStorage.setItem('emailForSignIn', emailDigitado);
-            alert(
-                "Enviamos um link de acesso para o seu e-mail.\n\n" +
-                "Verifique sua caixa de entrada e também a pasta de spam.\n" +
-                "Ao clicar no link, você entrará no ByeBuy com segurança."
-            );
-        })
-        .catch((error) => {
-            console.error("Erro ao enviar o link:", error);
-            alert("Erro ao enviar o e-mail: " + error.message);
+// =====================================================================
+// COMUNIDADE DAS ONGS
+// =====================================================================
+function listenToOngFeed() {
+    if (ongPostsListener) ongPostsListener();
+    
+    ongPostsListener = db.collection("ong_posts").orderBy("createdAt", "desc").onSnapshot((snapshot) => {
+        const container = document.getElementById('ong-feed-container');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        if (snapshot.empty) { 
+            container.innerHTML = '<p style="text-align:center; color:#999; margin-top:20px;">Nenhuma postagem ainda.</p>';
+            return; 
+        }
+        
+        snapshot.forEach((doc) => { 
+            const post = { id: doc.id, ...doc.data() };
+            renderOngPost(post, container);
         });
-}
-
-function handleRegister(e) {
-    e.preventDefault();
-    const email = document.getElementById('reg-email').value.trim();
-    const pass = document.getElementById('reg-pass').value;
-    const name = document.getElementById('reg-name').value.trim();
-    const isOng = document.getElementById('opt-ong').classList.contains('active');
-    const cnpj = document.getElementById('reg-cnpj').value.trim();
-
-    const phone = document.getElementById('reg-phone') ? document.getElementById('reg-phone').value.trim() : '';
-    const site = document.getElementById('reg-site') ? document.getElementById('reg-site').value.trim() : '';
-    const desc = document.getElementById('reg-desc') ? document.getElementById('reg-desc').value.trim() : '';
-
-    const fileInput = document.getElementById('reg-image');
-
-    if (isOng && cnpj.length < 14) {
-        alert("CNPJ inválido.");
-        return;
-    }
-
-    if (isOng && (!desc || desc.length < 30)) {
-        alert("A missão da ONG deve ser preenchida com mais detalhes para análise do administrador.");
-        return;
-    }
-
-    const createUserInDB = (photoDataUrl) => {
-        auth.createUserWithEmailAndPassword(email, pass).then((cred) => {
-            const data = {
-                name,
-                email,
-                bairro: document.getElementById('reg-bairro').value,
-                type: isOng ? 'ONG' : 'Pessoa',
-                photoURL: photoDataUrl || 'https://via.placeholder.com/100',
-                status: isOng ? 'pending' : 'active',
-                createdAt: Date.now()
-            };
-
-            if (isOng) {
-                data.cnpj = cnpj;
-                data.ongType = document.getElementById('reg-type-ong').value;
-                if (phone) data.phone = phone;
-                if (site) data.website = site;
-                if (desc) data.description = desc;
-                if (desc) data.mission = desc;
-            }
-
-            return db.collection("users").doc(cred.user.uid).set(data);
-        }).then(() => {
-            auth.signOut();
-            if (isOng) {
-                document.getElementById('success-ong-name').innerText = name;
-                document.getElementById('modal-cadastro-sucesso').classList.remove('hidden');
-            } else {
-                alert("Conta criada com sucesso!");
-                nav('login');
-            }
-        }).catch(e => alert(e.message));
-    };
-
-    if (fileInput.files[0]) {
-        const r = new FileReader();
-        r.onload = (ev) => createUserInDB(ev.target.result);
-        r.readAsDataURL(fileInput.files[0]);
-    } else createUserInDB(null);
-}
-
-function previewRegisterImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-function setupCNPJMask() {
-    const e = document.getElementById('reg-cnpj');
-    if (e) e.addEventListener('input', ev => {
-        let x = ev.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,3})(\d{0,3})(\d{0,4})(\d{0,2})/);
-        ev.target.value = !x[2] ? x[1] : x[1] + '.' + x[2] + '.' + x[3] + '/' + x[4] + (x[5] ? '-' + x[5] : '');
     });
 }
 
-function logout() { auth.signOut().then(() => location.reload()); }
+function renderOngPost(post, container) {
+    const dateObj = new Date(post.createdAt);
+    const dateStr = dateObj.toLocaleDateString() + ' às ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let isOwner = currentUser && (post.ongId === currentUser.uid);
+    let isAdminUser = isAdmin();
+    let deleteBtn = '';
+    
+    if (isOwner || isAdminUser) {
+        deleteBtn = `<button onclick="deleteOngPost('${post.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:1.2rem;" title="Apagar Postagem">🗑️</button>`;
+    }
 
-// CRIAÇÃO DE ITENS E PERFIL
-function handleCreateItem(e) {
+    const imgHtml = post.image ? `<img src="${post.image}" class="ong-post-image">` : '';
+
+    const html = `
+        <div class="ong-post-card">
+            <div class="ong-post-header">
+                <img src="${post.ongAvatar}" class="ong-post-avatar" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">
+                <div style="flex:1;">
+                    <div class="ong-post-name" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">${post.ongName}</div>
+                    <div class="ong-post-date">${dateStr}</div>
+                </div>
+                ${deleteBtn}
+            </div>
+            ${imgHtml}
+            <div class="ong-post-body">${post.content}</div>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+function handleCreateOngPost(e) {
     e.preventDefault();
-    const newItem = {
-        title: document.getElementById('item-title').value,
-        category: document.getElementById('item-category').value,
-        org: currentUser.name,
-        ownerUid: currentUser.uid,
-        bairro: currentUser.bairro,
+    const content = document.getElementById('post-content').value;
+    const newPost = {
+        ongId: currentUser.uid,
+        ongName: currentUser.name,
+        ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
+        content: content,
         createdAt: Date.now()
     };
 
-    if (currentUser.type === 'ONG') {
-        newItem.type = 'need';
-        newItem.total = parseInt(document.getElementById('item-total').value);
-        newItem.current = 0;
-    } else {
-        newItem.type = 'donation';
-        newItem.condition = document.getElementById('item-condition').value;
-    }
-
     const save = (img) => {
-        newItem.image = img;
-        db.collection("items").add(newItem).then(() => {
-            closeModal('modal-item');
-            alert("Publicado!");
-        });
+        newPost.image = img;
+        db.collection("ong_posts").add(newPost).then(() => { 
+            closeModal('modal-ong-post'); 
+            document.getElementById('post-content').value = '';
+            document.getElementById('post-image').value = '';
+            alert("Postagem publicada com sucesso!"); 
+        }).catch(err => alert("Erro: " + err.message));
     };
-
-    const f = document.getElementById('item-image').files[0];
-    if (f) {
-        const r = new FileReader();
-        r.onload = ev => save(ev.target.result);
-        r.readAsDataURL(f);
-    } else save(null);
+    
+    const f = document.getElementById('post-image').files[0];
+    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
+    else save(null);
 }
 
-function openItemModal() {
-    if (!currentUser) {
-        alert("Faça login primeiro.");
-        nav('login');
-        return;
+function deleteOngPost(id) {
+    if(confirm("Deseja mesmo apagar esta postagem da Comunidade?")) {
+        db.collection("ong_posts").doc(id).delete();
     }
-
-    if (currentUser.type === 'ONG') {
-        document.getElementById('ong-fields').classList.remove('hidden');
-        document.getElementById('condition-field').classList.add('hidden');
-    } else {
-        document.getElementById('ong-fields').classList.add('hidden');
-        document.getElementById('condition-field').classList.remove('hidden');
-    }
-
-    document.getElementById('modal-item').classList.remove('hidden');
 }
 
+function openOngPostModal() {
+    document.getElementById('modal-ong-post').classList.remove('hidden');
+}
+
+// =====================================================================
+// PERFIL DO USUÁRIO
+// =====================================================================
 function openProfileModal() {
     if (!currentUser) return;
     document.getElementById('modal-profile').classList.remove('hidden');
@@ -452,7 +659,7 @@ function handleSaveProfile(e) {
     const bairro = document.getElementById('prof-bairro').value;
     const updateData = { bairro: bairro };
     const fileInput = document.getElementById('prof-image');
-
+    
     const saveToDb = () => {
         if (currentUser.type === 'ONG') {
             updateData.description = document.getElementById('prof-desc').value;
@@ -488,6 +695,14 @@ function previewProfileImage(input) {
     }
 }
 
+function previewRegisterImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) { document.getElementById('reg-preview').src = e.target.result; }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
 function openPublicProfile(uid) {
     if (!uid) return;
     db.collection("users").doc(uid).get().then((doc) => {
@@ -498,14 +713,14 @@ function openPublicProfile(uid) {
             document.getElementById('pub-type').textContent = user.type === 'ONG' ? 'ONG' : 'Doador';
             document.getElementById('pub-bairro').textContent = user.bairro || 'Niterói';
             document.getElementById('pub-avatar').src = user.photoURL || 'https://via.placeholder.com/100';
-
+            
             if (user.type === 'ONG') {
                 document.getElementById('pub-phone-box').classList.remove('hidden');
                 document.getElementById('pub-site-box').classList.remove('hidden');
                 document.getElementById('pub-desc-box').classList.remove('hidden');
-
+                
                 document.getElementById('pub-phone').textContent = user.phone || 'Não informado';
-                document.getElementById('pub-desc').textContent = user.mission || user.description || 'Sem descrição.';
+                document.getElementById('pub-desc').textContent = user.description || 'Sem descrição.';
                 const siteEl = document.getElementById('pub-site');
                 if (user.website) {
                     siteEl.href = user.website.startsWith('http') ? user.website : `https://${user.website}`;
@@ -523,23 +738,20 @@ function openPublicProfile(uid) {
     });
 }
 
-// MENSAGENS
+// =====================================================================
+// MENSAGENS E CAIXA DE ENTRADA
+// =====================================================================
 function openChat(itemId, ownerId, itemTitle) {
     if (!currentUser) { alert("Faça login!"); nav('login'); return; }
     if (currentUser.uid === ownerId) { alert("Este item é seu."); return; }
-
     currentChatId = `${itemId}_${currentUser.uid}`;
     db.collection("chats").doc(currentChatId).set({
         participants: [currentUser.uid, ownerId],
-        itemId,
-        ownerId,
-        interestedId: currentUser.uid,
+        itemId, ownerId, interestedId: currentUser.uid,
         interestedName: currentUser.name,
         interestedAvatar: currentUser.photoURL,
-        itemTitle,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        itemTitle, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-
     loadChatUI(itemTitle);
 }
 
@@ -547,28 +759,18 @@ function openChatList(itemId) {
     document.getElementById('modal-chat-list').classList.remove('hidden');
     const container = document.getElementById('chat-list-container');
     container.innerHTML = '<p>A carregar...</p>';
-
     db.collection("chats").where("itemId", "==", itemId).get().then((snap) => {
         container.innerHTML = '';
         const myChats = [];
-        snap.forEach(doc => {
-            if (doc.data().ownerId === currentUser.uid) myChats.push({ id: doc.id, ...doc.data() });
-        });
-
-        if (myChats.length === 0) {
-            container.innerHTML = '<p style="text-align:center;">Sem interessados.</p>';
-            return;
-        }
-
+        snap.forEach(doc => { if(doc.data().ownerId === currentUser.uid) myChats.push({id:doc.id, ...doc.data()}); });
+        
+        if (myChats.length === 0) { container.innerHTML = '<p style="text-align:center;">Sem interessados.</p>'; return; }
+        
         myChats.forEach(chat => {
             const div = document.createElement('div');
             div.className = 'chat-list-item';
             div.innerHTML = `<span>${chat.interestedName}</span><small style="color:blue">Abrir</small>`;
-            div.onclick = () => {
-                closeModal('modal-chat-list');
-                currentChatId = chat.id;
-                loadChatUI(chat.itemTitle);
-            };
+            div.onclick = () => { closeModal('modal-chat-list'); currentChatId = chat.id; loadChatUI(chat.itemTitle); };
             container.appendChild(div);
         });
     });
@@ -579,9 +781,7 @@ function loadChatUI(title) {
     document.getElementById('chat-title').innerText = title;
     const container = document.getElementById('chat-messages');
     container.innerHTML = 'A carregar...';
-
     if (unsubscribeChat) unsubscribeChat();
-
     unsubscribeChat = db.collection("chats").doc(currentChatId).collection("messages").orderBy("timestamp", "asc").onSnapshot(snap => {
         container.innerHTML = '';
         snap.forEach(doc => {
@@ -600,7 +800,7 @@ function sendMessage(e) {
     const input = document.getElementById('msg-input');
     const text = input.value.trim();
     if (!text) return;
-
+    
     const timestamp = firebase.firestore.FieldValue.serverTimestamp();
 
     db.collection("chats").doc(currentChatId).collection("messages").add({
@@ -624,16 +824,16 @@ function listenToMyChats() {
         .orderBy("updatedAt", "desc")
         .onSnapshot(snap => {
             const container = document.getElementById('messages-list-container');
-            if (container) container.innerHTML = '';
+            if(container) container.innerHTML = '';
 
             if (snap.empty) {
-                if (container) container.innerHTML = '<p style="text-align:center;">Ainda não tem conversas.</p>';
+                if(container) container.innerHTML = '<p style="text-align:center;">Ainda não tem conversas.</p>';
                 return;
             }
 
             snap.docChanges().forEach(change => {
                 const chatData = change.doc.data();
-
+                
                 if (change.type === "modified" && chatData.lastSenderId && chatData.lastSenderId !== currentUser.uid) {
                     const isChatOpen = !document.getElementById('modal-chat').classList.contains('hidden');
                     if (!(isChatOpen && currentChatId === change.doc.id)) {
@@ -646,9 +846,9 @@ function listenToMyChats() {
                 const chat = doc.data();
                 let otherName = chat.interestedId === currentUser.uid ? "Dono do Item" : chat.interestedName;
 
-                if (container) {
+                if(container) {
                     const div = document.createElement('div');
-                    div.className = 'admin-item';
+                    div.className = 'admin-item'; 
                     div.style.cursor = 'pointer';
                     div.innerHTML = `
                         <div class="admin-item-info">
@@ -662,9 +862,9 @@ function listenToMyChats() {
                             <button class="btn-submit btn-outline" style="padding: 5px 15px;">Abrir</button>
                         </div>
                     `;
-                    div.onclick = () => {
-                        currentChatId = doc.id;
-                        loadChatUI(chat.itemTitle);
+                    div.onclick = () => { 
+                        currentChatId = doc.id; 
+                        loadChatUI(chat.itemTitle); 
                     };
                     container.appendChild(div);
                 }
@@ -686,77 +886,33 @@ function showNotification(mensagem, chatId, titulo) {
     setTimeout(() => { toast.classList.add('hidden'); }, 5000);
 }
 
-// EDITAR E APAGAR
-function deleteMyItem(itemId, itemTitle) {
-    if (confirm(`Tem a certeza que deseja apagar o item "${itemTitle}"?\nEsta ação não pode ser desfeita.`)) {
-        db.collection("items").doc(itemId).delete().then(() => {
-            alert("Item apagado com sucesso!");
-        }).catch(err => alert("Erro ao apagar: " + err.message));
+
+// =====================================================================
+// FUNÇÕES DE ADMINISTRAÇÃO E UTILITÁRIOS
+// =====================================================================
+function toggleRegisterType(t) {
+    const toggle = document.getElementById('register-toggle');
+    const optPessoa = document.getElementById('opt-pessoa');
+    const optOng = document.getElementById('opt-ong');
+    const ongFields = document.getElementById('ong-reg-fields');
+    
+    if (t === 'ong') {
+        toggle.classList.add('toggle-right');
+        optOng.classList.add('active');
+        optPessoa.classList.remove('active');
+        ongFields.classList.remove('hidden'); 
+    } else {
+        toggle.classList.remove('toggle-right');
+        optPessoa.classList.add('active');
+        optOng.classList.remove('active');
+        ongFields.classList.add('hidden'); 
     }
 }
 
-function openEditItemModal(itemId) {
-    const item = itemsCache.find(i => i.id === itemId);
-    if (!item) return;
-
-    document.getElementById('edit-item-id').value = item.id;
-    document.getElementById('edit-item-title').value = item.title;
-    document.getElementById('edit-item-category').value = item.category;
-
-    if (currentUser.type === 'ONG') {
-        document.getElementById('edit-condition-field').classList.add('hidden');
-        document.getElementById('edit-ong-fields').classList.remove('hidden');
-        document.getElementById('edit-item-total').value = item.total;
-    } else {
-        document.getElementById('edit-condition-field').classList.remove('hidden');
-        document.getElementById('edit-ong-fields').classList.add('hidden');
-        document.getElementById('edit-item-condition').value = item.condition;
-    }
-
-    document.getElementById('modal-edit-item').classList.remove('hidden');
-}
-
-function handleUpdateItem(e) {
-    e.preventDefault();
-    const itemId = document.getElementById('edit-item-id').value;
-
-    const updateData = {
-        title: document.getElementById('edit-item-title').value,
-        category: document.getElementById('edit-item-category').value,
-    };
-
-    if (currentUser.type === 'ONG') {
-        updateData.total = parseInt(document.getElementById('edit-item-total').value);
-    } else {
-        updateData.condition = document.getElementById('edit-item-condition').value;
-    }
-
-    const fileInput = document.getElementById('edit-item-image');
-
-    const saveToDb = () => {
-        db.collection("items").doc(itemId).update(updateData).then(() => {
-            closeModal('modal-edit-item');
-            alert("Item atualizado com sucesso!");
-        }).catch(err => alert("Erro ao atualizar: " + err.message));
-    };
-
-    if (fileInput.files[0]) {
-        const r = new FileReader();
-        r.onload = ev => {
-            updateData.image = ev.target.result;
-            saveToDb();
-        };
-        r.readAsDataURL(fileInput.files[0]);
-    } else {
-        saveToDb();
-    }
-}
-
-// ADMIN
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-
+    
     if (tab === 'ongs') {
         document.querySelector('.admin-tab:nth-child(1)').classList.add('active');
         document.getElementById('admin-tab-ongs').classList.add('active');
@@ -780,27 +936,23 @@ function loadAdminONGs() {
         snapshot.forEach((doc) => {
             const ong = doc.data();
             const isPending = ong.status === 'pending';
-            const statusBadge = isPending
-                ? `<span style="background:orange; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">PENDENTE</span>`
+            const statusBadge = isPending 
+                ? `<span style="background:orange; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">PENDENTE</span>` 
                 : `<span style="background:green; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">ATIVO</span>`;
 
-            const approveBtn = isPending
-                ? `<button class="admin-btn" style="background:green; color:white;" onclick="approveONG('${doc.id}', '${ong.name}')">✅ Aprovar</button>`
+            const approveBtn = isPending 
+                ? `<button class="admin-btn" style="background:green; color:white;" onclick="approveONG('${doc.id}', '${ong.name}')">✅ Aprovar</button>` 
                 : '';
 
             const div = document.createElement('div');
             div.className = 'admin-item';
             div.setAttribute('data-search', `${ong.name} ${ong.email} ${ong.bairro} ${ong.cnpj || ''}`.toLowerCase());
-
+            
             div.innerHTML = `
                 <img src="${ong.photoURL || 'https://via.placeholder.com/60'}" class="admin-item-avatar" alt="${ong.name}">
                 <div class="admin-item-info">
                     <div class="admin-item-name">${ong.name} <span class="admin-badge admin-badge-ong">ONG</span> ${statusBadge}</div>
-                    <div class="admin-item-details">
-                        📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'}
-                        ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}
-                        ${ong.description ? `<br><strong>Missão:</strong> ${ong.description}` : ''}
-                    </div>
+                    <div class="admin-item-details">📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'} ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}</div>
                 </div>
                 <div class="admin-item-actions">
                     ${approveBtn}
@@ -814,8 +966,8 @@ function loadAdminONGs() {
 }
 
 function approveONG(uid, name) {
-    if (!isAdmin()) return;
-    if (confirm(`Aprovar o registo da ONG ${name}?`)) {
+    if(!isAdmin()) return;
+    if(confirm(`Aprovar o registo da ONG ${name}?`)) {
         db.collection("users").doc(uid).update({ status: 'active' }).then(() => {
             alert("ONG Aprovada com sucesso!");
             loadAdminONGs();
@@ -837,7 +989,7 @@ function loadAdminUsers() {
             const div = document.createElement('div');
             div.className = 'admin-item';
             div.setAttribute('data-search', `${user.name} ${user.email} ${user.bairro}`.toLowerCase());
-
+            
             div.innerHTML = `
                 <img src="${user.photoURL || 'https://via.placeholder.com/60'}" class="admin-item-avatar" alt="${user.name}">
                 <div class="admin-item-info">
@@ -858,8 +1010,8 @@ function deleteUser(userId, userName) {
     if (!confirm(`Tem a certeza que deseja excluir o utilizador "${userName}"?\n\nEsta ação é irreversível.`)) return;
     db.collection("users").doc(userId).delete().then(() => {
         alert(`Utilizador "${userName}" excluído!`);
-        loadAdminUsers();
-    }).catch(() => alert("Erro ao excluir utilizador."));
+        loadAdminUsers(); 
+    }).catch(err => alert("Erro ao excluir utilizador."));
 }
 
 function filterAdminONGs() {
@@ -920,13 +1072,13 @@ function handleAdminEditONG(e) {
     };
 
     const fileInput = document.getElementById('admin-ong-image');
-
+    
     const saveToDb = () => {
         db.collection("users").doc(ongId).update(updateData).then(() => {
             alert("ONG atualizada com sucesso!");
             closeModal('modal-admin-edit-ong');
             loadAdminONGs();
-        }).catch(() => alert("Erro ao atualizar ONG."));
+        }).catch(err => alert("Erro ao atualizar ONG."));
     };
 
     if (fileInput.files[0]) {
@@ -966,30 +1118,7 @@ function deleteONG(ongId, ongName) {
     });
 }
 
-function toggleRegisterType(t) {
-    const optPessoa = document.getElementById('opt-pessoa');
-    const optOng = document.getElementById('opt-ong');
-    const ongFields = document.getElementById('ong-reg-fields');
-
-    if (t === 'ong') {
-        optOng.classList.add('active');
-        optPessoa.classList.remove('active');
-        ongFields.classList.remove('hidden');
-    } else {
-        optPessoa.classList.add('active');
-        optOng.classList.remove('active');
-        ongFields.classList.add('hidden');
-    }
-}
-
-function donateToItem(id, c, t) {
-    if (!currentUser) return nav('login');
-    if (c < t) db.collection("items").doc(id).update({ current: c + 1 }).then(() => alert("Obrigado!"));
-}
-
-function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
-
-// Link mágico
+// Captura a volta do Link Mágico
 if (auth.isSignInWithEmailLink(window.location.href)) {
     let emailSalvo = window.localStorage.getItem('emailForSignIn');
     if (!emailSalvo) {
@@ -997,9 +1126,9 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
     }
     if (emailSalvo) {
         auth.signInWithEmailLink(emailSalvo, window.location.href)
-            .then(() => {
+            .then((result) => {
                 window.localStorage.removeItem('emailForSignIn');
-                alert('Entrou com sucesso.');
+                alert(' Entrou com sucesso.');
                 window.history.replaceState(null, '', window.location.pathname);
                 nav('home');
             })
