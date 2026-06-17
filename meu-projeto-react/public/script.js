@@ -521,10 +521,28 @@ function registerDonationReceipt(itemId, current, total) {
         return;
     }
 
+    const newCurrent = current + amount;
+
     db.collection("items").doc(itemId).update({
-        current: current + amount
+        current: newCurrent
     }).then(() => {
-        alert(`Recebimento de ${amount} unidade(s) registrado com sucesso!`);
+        if (newCurrent >= total) {
+            if (confirm(`🎉 Meta atingida com sucesso! Deseja postar um agradecimento automático na Comunidade?`)) {
+                db.collection("ong_posts").add({
+                    ongId: currentUser.uid,
+                    ongName: currentUser.name,
+                    ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
+                    content: `🎉 Conseguimos! Batemos a nossa meta de arrecadação para este item. Muito obrigado a todos que doaram e fortaleceram a nossa causa!`,
+                    createdAt: Date.now()
+                }).then(() => {
+                    alert("Recebimento registrado e agradecimento publicado na Comunidade!");
+                });
+            } else {
+                alert("Recebimento registrado com sucesso!");
+            }
+        } else {
+            alert(`Recebimento de ${amount} unidade(s) registrado com sucesso!`);
+        }
     }).catch(err => alert("Erro: " + err.message));
 }
 
