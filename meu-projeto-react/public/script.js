@@ -63,12 +63,22 @@ window.onload = function() {
                 if(doc.exists) {
                     const userData = doc.data();
 
-                    if (userData.type === 'ONG' && userData.status === 'pending') {
-                        alert("A sua conta ainda está em análise pelos administradores. Aguarde a aprovação.");
-                        auth.signOut();
-                        currentUser = null;
-                        updateAuthUI();
-                        return;
+                    if (userData.type === 'ONG') {
+                        if (userData.status === 'pending') {
+                            alert("⏳ A sua conta ainda está em análise pela nossa equipe. Aguarde a aprovação para utilizar a plataforma.");
+                            auth.signOut();
+                            currentUser = null;
+                            updateAuthUI();
+                            return;
+                        }
+                        
+                        if (userData.status === 'rejected') {
+                            alert(`❌ Infelizmente a sua solicitação de cadastro foi recusada.\n\nMotivo informado pela administração:\n"${userData.rejectionReason}"\n\nEntre em contato conosco para mais informações.`);
+                            auth.signOut();
+                            currentUser = null;
+                            updateAuthUI();
+                            return;
+                        }
                     }
 
                     currentUser = { uid: user.uid, ...userData };
@@ -954,13 +964,28 @@ function loadAdminONGs() {
         snapshot.forEach((doc) => {
             const ong = doc.data();
             const isPending = ong.status === 'pending';
-            const statusBadge = isPending 
-                ? `<span style="background:orange; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">PENDENTE</span>` 
-                : `<span style="background:green; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">ATIVO</span>`;
+            const isRejected = ong.status === 'rejected';
+            
+            let statusBadge = '';
+            if (isPending) statusBadge = `<span style="background:orange; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">PENDENTE</span>`;
+            else if (isRejected) statusBadge = `<span style="background:var(--danger-color); color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">RECUSADA</span>`;
+            else statusBadge = `<span style="background:green; color:white; padding:2px 8px; border-radius:10px; font-size:0.7rem; margin-left:5px;">ATIVA</span>`;
 
-            const approveBtn = isPending 
-                ? `<button class="admin-btn" style="background:green; color:white;" onclick="approveONG('${doc.id}', '${ong.name}')">✅ Aprovar</button>` 
-                : '';
+            let actionsHTML = '';
+            
+            // SE A ONG ESTIVER PENDENTE, MOSTRA APENAS O BOTÃO DE ANALISAR
+            if (isPending) {
+                actionsHTML = `<button class="admin-btn" style="background:var(--primary-color); color:white;" onclick="openReviewONGModal('${doc.id}')">📄 Analisar Solicitação</button>`;
+            } else if (isRejected) {
+                // SE JÁ FOI RECUSADA, SÓ PODE EXCLUIR DEFINITIVAMENTE
+                actionsHTML = `<button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir Definitivo</button>`;
+            } else {
+                // SE FOR ATIVA, MOSTRA EDITAR E EXCLUIR
+                actionsHTML = `
+                    <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">✏️ Editar</button>
+                    <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir</button>
+                `;
+            }
 
             const div = document.createElement('div');
             div.className = 'admin-item';
@@ -970,12 +995,10 @@ function loadAdminONGs() {
                 <img src="${ong.photoURL || 'https://via.placeholder.com/60'}" class="admin-item-avatar" alt="${ong.name}">
                 <div class="admin-item-info">
                     <div class="admin-item-name">${ong.name} <span class="admin-badge admin-badge-ong">ONG</span> ${statusBadge}</div>
-                    <div class="admin-item-details">📧 ${ong.email} | 📍 ${ong.bairro} | 🏢 ${ong.ongType || 'N/A'} ${ong.cnpj ? `<br>CNPJ: ${ong.cnpj}` : ''}</div>
+                    <div class="admin-item-details">📧 ${ong.email} | 📍 ${ong.bairro}</div>
                 </div>
                 <div class="admin-item-actions">
-                    ${approveBtn}
-                    <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">✏️ Editar</button>
-                    <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir</button>
+                    ${actionsHTML}
                 </div>
             `;
             container.appendChild(div);
@@ -1155,4 +1178,69 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
                 alert("Erro ao logar: " + error.message);
             });
     }
+    function openReviewONGModal(ongId) {
+    db.collection("users").doc(ongId).get().then((doc) => {
+        if (!doc.exists) return;
+        const ong = doc.data();
+        
+        document.getElementById('review-ong-id').value = ongId;
+        document.getElementById('review-ong-avatar').src = ong.photoURL || 'https://via.placeholder.com/100';
+        document.getElementById('review-ong-name').innerText = ong.name || 'Sem nome';
+        document.getElementById('review-ong-cnpj').innerText = ong.cnpj ? `CNPJ: ${ong.cnpj}` : 'Sem CNPJ';
+        document.getElementById('review-ong-type').innerText = ong.ongType || 'Não informado';
+        document.getElementById('review-ong-bairro').innerText = ong.bairro || 'Não informado';
+        document.getElementById('review-ong-email').innerText = ong.email || 'Não informado';
+        document.getElementById('review-ong-phone').innerText = ong.phone || 'Não informado';
+        document.getElementById('review-ong-site').innerText = ong.website || 'Não informado';
+        document.getElementById('review-ong-desc').innerText = ong.description || 'Nenhuma descrição/missão foi fornecida por esta ONG.';
+        
+        // Reseta o visual dos botões e esconde a caixa de recusa
+        document.getElementById('review-reject-box').classList.add('hidden');
+        document.getElementById('review-reject-reason').value = '';
+        document.getElementById('btn-approve-ong').classList.remove('hidden');
+        document.getElementById('btn-show-reject').classList.remove('hidden');
+        document.getElementById('btn-confirm-reject').classList.add('hidden');
+        
+        document.getElementById('modal-admin-review-ong').classList.remove('hidden');
+    });
+}
+
+function toggleRejectBox() {
+    document.getElementById('review-reject-box').classList.remove('hidden');
+    document.getElementById('btn-approve-ong').classList.add('hidden');
+    document.getElementById('btn-show-reject').classList.add('hidden');
+    document.getElementById('btn-confirm-reject').classList.remove('hidden');
+}
+
+function confirmApproveONG() {
+    const ongId = document.getElementById('review-ong-id').value;
+    if(confirm("Deseja aprovar o cadastro desta ONG? Ela terá acesso total à plataforma a partir de agora.")) {
+        db.collection("users").doc(ongId).update({ status: 'active' }).then(() => {
+            alert("✅ ONG Aprovada com sucesso!");
+            closeModal('modal-admin-review-ong');
+            loadAdminONGs();
+        }).catch(err => alert("Erro ao aprovar: " + err.message));
+    }
+}
+
+function confirmRejectONG() {
+    const ongId = document.getElementById('review-ong-id').value;
+    const reason = document.getElementById('review-reject-reason').value.trim();
+    
+    if (!reason) {
+        alert("⚠️ O preenchimento do motivo é OBRIGATÓRIO para recusar o cadastro de uma ONG.");
+        return;
+    }
+
+    if(confirm("Tem certeza que deseja RECUSAR esta solicitação?")) {
+        db.collection("users").doc(ongId).update({ 
+            status: 'rejected',
+            rejectionReason: reason 
+        }).then(() => {
+            alert("❌ ONG recusada. O motivo foi salvo no banco de dados.");
+            closeModal('modal-admin-review-ong');
+            loadAdminONGs();
+        }).catch(err => alert("Erro ao recusar: " + err.message));
+    }
+}
 }
