@@ -57,6 +57,41 @@ function setupPhoneMask() {
     }
 }
 
+function compressImage(file, maxWidth, maxHeight, quality) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = event => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round(height *= maxWidth / width);
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round(width *= maxHeight / height);
+                        height = maxHeight;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(dataUrl);
+            };
+        };
+    });
+}
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
 
@@ -650,6 +685,19 @@ function renderOngPost(post, container) {
 function handleCreateOngPost(e) {
     e.preventDefault();
     const content = document.getElementById('post-content').value;
+    const fileInput = document.getElementById('post-image');
+    const files = Array.from(fileInput.files);
+
+    if (files.length === 0) {
+        alert("É obrigatório anexar pelo menos uma foto para comprovar o resultado da ação!");
+        return;
+    }
+
+    if (files.length > 4) {
+        alert("Por favor, selecione no máximo 4 fotos para manter a postagem leve e rápida de carregar.");
+        return;
+    }
+
     const newPost = {
         ongId: currentUser.uid,
         ongName: currentUser.name,
@@ -658,19 +706,17 @@ function handleCreateOngPost(e) {
         createdAt: Date.now()
     };
 
-    const save = (img) => {
-        newPost.image = img;
+    // Aplica a compressão (máximo 800px de tamanho, 70% de qualidade)
+    Promise.all(files.map(f => compressImage(f, 800, 800, 0.7)))
+    .then(base64Images => {
+        newPost.images = base64Images;
         db.collection("ong_posts").add(newPost).then(() => { 
             closeModal('modal-ong-post'); 
             document.getElementById('post-content').value = '';
-            document.getElementById('post-image').value = '';
-            alert("Postagem publicada com sucesso!"); 
-        }).catch(err => alert("Erro: " + err.message));
-    };
-    
-    const f = document.getElementById('post-image').files[0];
-    if (f) { const r = new FileReader(); r.onload = ev => save(ev.target.result); r.readAsDataURL(f); }
-    else save(null);
+            fileInput.value = '';
+            alert("Postagem com fotos publicada com sucesso no feed da Comunidade!"); 
+        }).catch(err => alert("Erro ao salvar no banco: " + err.message));
+    });
 }
 
 function deleteOngPost(id) {
