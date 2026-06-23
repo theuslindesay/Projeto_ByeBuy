@@ -75,18 +75,24 @@ window.onload = function() {
 
                     if (userData.type === 'ONG') {
                         if (userData.status === 'pending') {
-                            alert("⏳ A sua conta ainda está em análise pela nossa equipe. Aguarde a aprovação para utilizar a plataforma.");
                             auth.signOut();
                             currentUser = null; 
                             updateAuthUI();
+                            
+                            if (!document.getElementById('view-register').classList.contains('active')) {
+                                alert("⏳ A sua conta ainda está em análise pela nossa equipe. Aguarde a aprovação para utilizar a plataforma.");
+                            }
                             return;
                         }
                         
                         if (userData.status === 'rejected') {
-                            alert(`❌ Infelizmente a sua solicitação de cadastro foi recusada.\n\nMotivo informado pela administração:\n"${userData.rejectionReason}"\n\nEntre em contato conosco para mais informações.`);
                             auth.signOut();
                             currentUser = null;
                             updateAuthUI();
+                            
+                            if (!document.getElementById('view-register').classList.contains('active')) {
+                                alert(`❌ Infelizmente a sua solicitação de cadastro foi recusada.\n\nMotivo informado pela administração:\n"${userData.rejectionReason}"\n\nEntre em contato conosco para mais informações.`);
+                            }
                             return;
                         }
                     }
