@@ -1232,3 +1232,218 @@ function confirmRejectONG() {
         }).catch(err => alert("Erro ao recusar: " + err.message));
     }
 }
+
+function shareToCommunity(title, total) {
+    document.getElementById('post-content').value = `🎉 Conseguimos! Batemos a nossa meta de arrecadação e recebemos ${total} unidades de ${title}! Muito obrigado a todos que nos ajudaram. Confiram as fotos da entrega:`;
+    openOngPostModal();
+}
+
+function moveCarousel(trackId, direction, max) {
+    const track = document.getElementById(trackId);
+    let currentIndex = parseInt(track.getAttribute('data-index'));
+    currentIndex += direction;
+    if (currentIndex < 0) currentIndex = max - 1;
+    if (currentIndex >= max) currentIndex = 0;
+    track.setAttribute('data-index', currentIndex);
+    track.style.transform = `translateX(-${currentIndex * 100}%)`;
+}
+
+function handleCreateOngPost(e) {
+    e.preventDefault();
+    const content = document.getElementById('post-content').value;
+    const fileInput = document.getElementById('post-image');
+    const files = Array.from(fileInput.files);
+
+    if (files.length === 0) {
+        alert("É obrigatório anexar pelo menos uma foto para comprovar o resultado da ação!");
+        return;
+    }
+
+    const newPost = {
+        ongId: currentUser.uid,
+        ongName: currentUser.name,
+        ongAvatar: currentUser.photoURL || 'https://via.placeholder.com/100',
+        content: content,
+        createdAt: Date.now()
+    };
+
+    Promise.all(files.map(f => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = ev => resolve(ev.target.result);
+            reader.readAsDataURL(f);
+        });
+    })).then(base64Images => {
+        newPost.images = base64Images;
+        db.collection("ong_posts").add(newPost).then(() => { 
+            closeModal('modal-ong-post'); 
+            document.getElementById('post-content').value = '';
+            fileInput.value = '';
+            alert("Postagem com fotos publicada com sucesso no feed da Comunidade!"); 
+        }).catch(err => alert("Erro: " + err.message));
+    });
+}
+
+function renderOngPost(post, container) {
+    const dateObj = new Date(post.createdAt);
+    const dateStr = dateObj.toLocaleDateString() + ' às ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let isOwner = currentUser && (post.ongId === currentUser.uid);
+    let isAdminUser = isAdmin();
+    let deleteBtn = '';
+    
+    if (isOwner || isAdminUser) {
+        deleteBtn = `<button onclick="deleteOngPost('${post.id}')" style="background:none; border:none; color:var(--danger-color); cursor:pointer; font-size:1.2rem;" title="Apagar Postagem">🗑️</button>`;
+    }
+
+    let imgHtml = '';
+    if (post.images && post.images.length > 0) {
+        const trackId = 'track-' + post.id;
+        let imgs = post.images.map(src => `<img src="${src}">`).join('');
+        let controls = post.images.length > 1 ? `
+            <button class="carousel-btn prev" onclick="moveCarousel('${trackId}', -1, ${post.images.length})">❮</button>
+            <button class="carousel-btn next" onclick="moveCarousel('${trackId}', 1, ${post.images.length})">❯</button>
+        ` : '';
+        
+        imgHtml = `
+            <div class="carousel-container">
+                <div class="carousel-track" id="${trackId}" data-index="0">
+                    ${imgs}
+                </div>
+                ${controls}
+            </div>
+        `;
+    } else if (post.image) {
+        imgHtml = `<img src="${post.image}" class="ong-post-image">`;
+    }
+
+    const html = `
+        <div class="ong-post-card">
+            <div class="ong-post-header">
+                <img src="${post.ongAvatar}" class="ong-post-avatar" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">
+                <div style="flex:1;">
+                    <div class="ong-post-name" onclick="openPublicProfile('${post.ongId}')" style="cursor:pointer;">${post.ongName}</div>
+                    <div class="ong-post-date">${dateStr}</div>
+                </div>
+                ${deleteBtn}
+            </div>
+            ${imgHtml}
+            <div class="ong-post-body">${post.content}</div>
+        </div>
+    `;
+    container.innerHTML += html;
+}
+
+function renderCard(id, item) {
+    const container = document.getElementById('feed-container');
+    
+    let isOwner = currentUser && (item.ownerUid === currentUser.uid);
+    let isAdminUser = isAdmin();
+
+    const isCompleted = item.status === 'completed';
+    const isMetaAtingida = item.type === 'need' && item.current >= item.total;
+    const cardFinished = isCompleted || isMetaAtingida;
+
+    if (cardFinished && !isOwner && !isAdminUser) {
+        return;
+    }
+
+    const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
+    let btnHTML = '';
+    let deleteBtnHTML = '';
+    
+    if (isOwner) {
+        btnHTML = `<button class="btn-submit btn-outline" onclick="openChatList('${id}')">Ver Mensagens 📩</button>`;
+
+        if (item.type === 'need' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="registerDonationReceipt('${id}', ${item.current}, ${item.total})">
+                    ✅ Confirmar Recebimento (Lote)
+                </button>`;
+        } else if (item.type === 'donation' && !cardFinished) {
+            btnHTML += `
+                <button class="btn-submit btn-green" style="margin-top:5px;" onclick="markAsDonated('${id}')">
+                    🎁 Marcar como Doado
+                </button>`;
+        }
+
+        if (!cardFinished) {
+            btnHTML += `
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px;" onclick="openEditItemModal('${id}')">✏️ Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px;" onclick="deleteMyItem('${id}', '${item.title}')">🗑️ Cancelar Postagem</button>
+                </div>`;
+        } else {
+            btnHTML += `<div style="text-align:center; margin-top:15px; font-weight:bold; color:var(--secondary-color);">Encerrado com Sucesso 🎉</div>`;
+            btnHTML += `<button class="btn-submit" style="background:var(--primary-color); margin-top:10px;" onclick="shareToCommunity('${item.title}', '${item.total || 1}')">📢 Compartilhar Resultado</button>`;
+        }
+    } else {
+        if (!cardFinished) {
+            if (item.type === 'need') {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', 'Olá! Tenho este item para doar: ${item.title}')">
+                    Tenho este item! (Combinar) 💬
+                </button>`;
+            } else {
+                btnHTML = `<button class="btn-submit" onclick="openChat('${id}', '${item.ownerUid}', '${item.title}')">Tenho Interesse 💬</button>`;
+            }
+        }
+
+        if (isAdminUser) {
+            deleteBtnHTML = `
+                <div style="display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top: 1px dashed #eee;">
+                    <button class="btn-submit" style="background:#f39c12; flex:1; padding:8px; font-size:0.8rem;" onclick="openEditItemModal('${id}')">🛠️ Admin: Editar</button>
+                    <button class="btn-submit" style="background:var(--danger-color); flex:1; padding:8px; font-size:0.8rem;" onclick="adminDeleteItem('${id}', '${item.title}')">🗑️ Admin: Excluir</button>
+                </div>
+            `;
+        }
+    }
+
+    const donorUid = item.ownerUid || '';
+    const donorName = `<a onclick="openPublicProfile('${donorUid}')" class="profile-link">${item.org}</a>`;
+    const codigoDoItem = item.itemCode ? item.itemCode : 'S/C';
+    const searchText = `${item.title} ${item.category} ${item.bairro} ${item.org} ${codigoDoItem}`.toLowerCase();
+    const categoryAttr = item.category ? item.category.toLowerCase() : '';
+
+    let cardHTML = `<article class="card ${cardFinished ? 'completed' : ''}" data-search="${searchText}" data-category="${categoryAttr}">`;
+    cardHTML += `<img src="${imgSrc}" class="card-img" alt="${item.title}">`;
+    cardHTML += `<div class="card-content">`;
+    
+    const codeTag = `<div style="background:#f0f0f0; padding:3px 8px; border-radius:5px; font-size:0.75rem; font-weight:bold; color:#555; display:inline-block; margin-bottom:10px;">Cód: ${codigoDoItem}</div>`;
+    
+    if (item.type === 'need') {
+        const pct = (item.current / item.total) * 100;
+        const tagClass = cardFinished ? 'tag completed' : 'tag';
+        const tagColor = cardFinished ? 'var(--secondary-color)' : 'var(--danger-color)';
+        const tagText = cardFinished ? 'Meta Atingida 🎉' : 'Pedido de ONG';
+
+        cardHTML += `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="background:${tagColor}; margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
+            <h3>${item.title}</h3>
+            <p class="ong-info"><strong>ONG:</strong> ${donorName} - ${item.bairro}</p>
+            <div class="progress-bar-bg"><div class="progress-fill" style="width: ${pct}%"></div></div>
+            <p style="font-size: 0.8rem;">${item.current} de ${item.total} conseguidos</p>
+            ${btnHTML}
+            ${deleteBtnHTML}
+        `;
+    } else {
+        const tagClass = cardFinished ? 'tag completed' : 'tag donation';
+        const tagText = cardFinished ? 'Doado 🎁' : 'Para Doação';
+
+        cardHTML += `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span class="${tagClass}" style="margin-bottom:0;">${tagText}</span>
+                ${codeTag}
+            </div>
+            <h3>${item.title}</h3>
+            <p class="ong-info"><strong>Doador:</strong> ${donorName} - ${item.bairro}</p>
+            <p style="margin-bottom: 5px;"><strong>Condição:</strong> ${item.condition}</p>
+            ${btnHTML}
+            ${deleteBtnHTML}
+        `;
+    }
+    cardHTML += `</div></article>`;
+    container.innerHTML += cardHTML;
+}

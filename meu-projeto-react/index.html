@@ -290,8 +290,9 @@
                     <textarea id="post-content" rows="4" placeholder="O que está a acontecer na sua ONG? Campanhas, agradecimentos, eventos..." required></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Foto da Ação (Opcional)</label>
-                    <input type="file" id="post-image" accept="image/*">
+                    <label>Fotos da Ação (Obrigatório)</label>
+                    <input type="file" id="post-image" accept="image/*" multiple required>
+                    <small style="color:#666; display:block; margin-top:5px;">Você pode selecionar várias fotos de uma vez.</small>
                 </div>
                 <button type="submit" class="btn-submit" style="background: var(--secondary-color);">Publicar no Feed</button>
             </form>
