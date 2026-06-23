@@ -47,6 +47,16 @@ function setupCNPJMask() {
     }); 
 }
 
+function setupPhoneMask() { 
+    const el = document.getElementById('reg-phone'); 
+    if(el) {
+        el.addEventListener('input', function (e) { 
+            let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/); 
+            e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : ''); 
+        }); 
+    }
+}
+
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 function openItemModal() { document.getElementById('modal-item').classList.remove('hidden'); }
 
@@ -67,7 +77,7 @@ window.onload = function() {
                         if (userData.status === 'pending') {
                             alert("⏳ A sua conta ainda está em análise pela nossa equipe. Aguarde a aprovação para utilizar a plataforma.");
                             auth.signOut();
-                            currentUser = null;
+                            currentUser = null; 
                             updateAuthUI();
                             return;
                         }
@@ -95,6 +105,7 @@ window.onload = function() {
     });
 
     setupCNPJMask();
+    setupPhoneMask(); 
 };
 
 function nav(view) {
@@ -161,25 +172,22 @@ function updateAuthUI() {
 function handleLogin(e) {
     e.preventDefault();
     const emailDigitado = document.getElementById('login-email').value;
+    const passDigitada = document.getElementById('login-pass').value;
 
-    if (!emailDigitado) {
-        alert("Por favor, digite um e-mail válido!");
+    if (!emailDigitado || !passDigitada) {
+        alert("Por favor, preencha o e-mail e a senha!");
         return;
     }
 
-    const actionCodeSettings = {
-        url: 'https://projeto-bye-buy.vercel.app', 
-        handleCodeInApp: true,
-    };
-
-    auth.sendSignInLinkToEmail(emailDigitado, actionCodeSettings)
-        .then(() => {
-            window.localStorage.setItem('emailForSignIn', emailDigitado);
-            alert('Um link de acesso foi enviado para o seu email! Verifique a sua caixa de entrada (e a pasta de Spam).');
+    auth.signInWithEmailAndPassword(emailDigitado, passDigitada)
+        .then((userCredential) => {
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-pass').value = '';
+            nav('home');
         })
         .catch((error) => {
-            console.error("Erro ao enviar o link:", error);
-            alert("Erro ao enviar o e-mail: " + error.message);
+            console.error("Erro ao fazer login:", error);
+            alert("Erro ao logar: E-mail ou senha incorretos.");
         });
 }
 
@@ -199,6 +207,10 @@ function handleRegister(e) {
 
     if (isOng && cnpj.length < 14) { 
         alert("CNPJ inválido."); return; 
+    }
+    
+    if (isOng && phone.length < 14) {
+        alert("Telefone inválido. Digite o número com o DDD."); return;
     }
 
     const createUserInDB = (photoDataUrl) => {
@@ -302,6 +314,10 @@ function renderCard(id, item) {
     const isCompleted = item.status === 'completed';
     const isMetaAtingida = item.type === 'need' && item.current >= item.total;
     const cardFinished = isCompleted || isMetaAtingida;
+
+    if (cardFinished && !isOwner && !isAdminUser) {
+        return;
+    }
 
     const imgSrc = item.image ? item.image : 'https://via.placeholder.com/400x200?text=Sem+Foto';
     let btnHTML = '';
@@ -973,14 +989,11 @@ function loadAdminONGs() {
 
             let actionsHTML = '';
             
-            // SE A ONG ESTIVER PENDENTE, MOSTRA APENAS O BOTÃO DE ANALISAR
             if (isPending) {
                 actionsHTML = `<button class="admin-btn" style="background:var(--primary-color); color:white;" onclick="openReviewONGModal('${doc.id}')">📄 Analisar Solicitação</button>`;
             } else if (isRejected) {
-                // SE JÁ FOI RECUSADA, SÓ PODE EXCLUIR DEFINITIVAMENTE
                 actionsHTML = `<button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir Definitivo</button>`;
             } else {
-                // SE FOR ATIVA, MOSTRA EDITAR E EXCLUIR
                 actionsHTML = `
                     <button class="admin-btn admin-btn-edit" onclick="openAdminEditONG('${doc.id}')">✏️ Editar</button>
                     <button class="admin-btn admin-btn-delete" onclick="deleteONG('${doc.id}', '${ong.name}')">🗑️ Excluir</button>
@@ -1004,16 +1017,6 @@ function loadAdminONGs() {
             container.appendChild(div);
         });
     });
-}
-
-function approveONG(uid, name) {
-    if(!isAdmin()) return;
-    if(confirm(`Aprovar o registo da ONG ${name}?`)) {
-        db.collection("users").doc(uid).update({ status: 'active' }).then(() => {
-            alert("ONG Aprovada com sucesso!");
-            loadAdminONGs();
-        }).catch(err => alert("Erro ao aprovar: " + err.message));
-    }
 }
 
 function loadAdminUsers() {
@@ -1159,26 +1162,7 @@ function deleteONG(ongId, ongName) {
     });
 }
 
-// Captura a volta do Link Mágico
-if (auth.isSignInWithEmailLink(window.location.href)) {
-    let emailSalvo = window.localStorage.getItem('emailForSignIn');
-    if (!emailSalvo) {
-        emailSalvo = window.prompt('Por favor, confirme o seu e-mail para finalizar o login:');
-    }
-    if (emailSalvo) {
-        auth.signInWithEmailLink(emailSalvo, window.location.href)
-            .then((result) => {
-                window.localStorage.removeItem('emailForSignIn');
-                alert(' Entrou com sucesso.');
-                window.history.replaceState(null, '', window.location.pathname);
-                nav('home');
-            })
-            .catch((error) => {
-                console.error("Erro ao fazer login pelo link:", error);
-                alert("Erro ao logar: " + error.message);
-            });
-    }
-    function openReviewONGModal(ongId) {
+function openReviewONGModal(ongId) {
     db.collection("users").doc(ongId).get().then((doc) => {
         if (!doc.exists) return;
         const ong = doc.data();
@@ -1194,7 +1178,6 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
         document.getElementById('review-ong-site').innerText = ong.website || 'Não informado';
         document.getElementById('review-ong-desc').innerText = ong.description || 'Nenhuma descrição/missão foi fornecida por esta ONG.';
         
-        // Reseta o visual dos botões e esconde a caixa de recusa
         document.getElementById('review-reject-box').classList.add('hidden');
         document.getElementById('review-reject-reason').value = '';
         document.getElementById('btn-approve-ong').classList.remove('hidden');
@@ -1242,5 +1225,4 @@ function confirmRejectONG() {
             loadAdminONGs();
         }).catch(err => alert("Erro ao recusar: " + err.message));
     }
-}
 }

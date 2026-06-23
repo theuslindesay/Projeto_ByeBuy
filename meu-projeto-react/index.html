@@ -102,7 +102,11 @@
                         <label>E-mail</label>
                         <input type="email" id="login-email" required>
                     </div>
-                    <button type="submit" class="btn-submit">Entrar com Link Mágico</button>
+                    <div class="form-group">
+                        <label>Senha</label>
+                        <input type="password" id="login-pass" required>
+                    </div>
+                    <button type="submit" class="btn-submit">Entrar</button>
                     <p style="margin-top: 1rem;">
                         Não tem conta? <a href="#" onclick="nav('register')" style="color:var(--primary-color);">Cadastre-se</a>
                     </p>
@@ -154,7 +158,7 @@
                         
                         <div class="form-group">
                             <label>Telefone / WhatsApp (Obrigatório)</label>
-                            <input type="text" id="reg-phone" placeholder="(21) 99999-9999">
+                            <input type="text" id="reg-phone" placeholder="(21) 99999-9999" maxlength="15">
                         </div>
                         <div class="form-group">
                             <label>Site ou Rede Social</label>
